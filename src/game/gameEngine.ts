@@ -1,6 +1,7 @@
 import { ALL_CATEGORIES, getQuestionsByLetter } from '../data/questions';
 import {
-  CellOwner,
+  BuzzerState,
+  BuzzerStatus,
   GameAction,
   QuestionItem,
   RoomGameState,
@@ -23,6 +24,22 @@ export function getArabicRoundTitle(roundNumber: number): string {
   return ROUND_NAMES_AR[roundNumber] || `الجولة ${roundNumber}`;
 }
 
+export function createBuzzerState(
+  status: BuzzerStatus = 'idle',
+  questionNonce: number = 1,
+  answerTimerSeconds: number = 10
+): BuzzerState {
+  return {
+    status,
+    questionNonce,
+    winner: null,
+    winnerTimestamp: null,
+    lockedOutTeams: [],
+    answerTimerRemaining: answerTimerSeconds,
+    answerTimerRunning: false,
+  };
+}
+
 /**
  * Picks an unused question for the specified Arabic letter.
  * Never repeats a question within the same match (`usedQuestionIds`).
@@ -38,7 +55,6 @@ export function pickQuestionForLetter(
     (q) => !usedSet.has(q.id)
   );
 
-  // If filtering by selected categories left no questions, fall back to any unused question for that letter
   if (candidates.length === 0 && selectedCategories.length < ALL_CATEGORIES.length) {
     candidates = getQuestionsByLetter(letter).filter((q) => !usedSet.has(q.id));
   }
@@ -47,8 +63,6 @@ export function pickQuestionForLetter(
     return { question: null, exhausted: true };
   }
 
-  // Deterministic-friendly first unused or random among unused?
-  // Picking the first unused item in a shuffled or ordered bank is deterministic for tests while varied across letters.
   const chosen = candidates[0];
   return { question: chosen, exhausted: false };
 }
@@ -97,11 +111,14 @@ export function createInitialRoomState(
     settings: {
       totalRounds: 3,
       timerSeconds: 30,
+      answerTimerSeconds: 10,
+      autoOpenBuzzerOnQuestion: false,
       theme: 'classic',
       fontFamily: 'Cairo',
       selectedCategories: [...ALL_CATEGORIES],
       showLettersOnOwnedCells: false,
     },
+    buzzer: createBuzzerState('idle', 1, 10),
     timerRemaining: 30,
     timerRunning: false,
     lastUpdatedAt: now,
@@ -127,6 +144,10 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       ...state.settings,
       selectedCategories: [...state.settings.selectedCategories],
     },
+    buzzer: {
+      ...state.buzzer,
+      lockedOutTeams: [...state.buzzer.lockedOutTeams],
+    },
     version: state.version + 1,
     lastUpdatedAt: now,
   };
@@ -144,6 +165,12 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       if (typeof p.timerSeconds === 'number' && p.timerSeconds >= 0) {
         next.settings.timerSeconds = p.timerSeconds;
       }
+      if (typeof p.answerTimerSeconds === 'number' && p.answerTimerSeconds >= 3) {
+        next.settings.answerTimerSeconds = p.answerTimerSeconds;
+      }
+      if (typeof p.autoOpenBuzzerOnQuestion === 'boolean') {
+        next.settings.autoOpenBuzzerOnQuestion = p.autoOpenBuzzerOnQuestion;
+      }
       if (p.theme) next.settings.theme = p.theme;
       if (p.fontFamily) next.settings.fontFamily = p.fontFamily;
 
@@ -160,6 +187,11 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       next.answerRevealed = false;
       next.winningTeam = null;
       next.winningPath = [];
+      next.buzzer = createBuzzerState(
+        'idle',
+        state.buzzer.questionNonce + 1,
+        next.settings.answerTimerSeconds
+      );
       next.timerRemaining = next.settings.timerSeconds;
       next.timerRunning = false;
       next.phase = 'playing';
@@ -178,10 +210,8 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       const { cellId } = action.payload;
       if (cellId < 0 || cellId >= TOTAL_CELLS) return state;
       const targetCell = next.cells[cellId];
-      // Only unowned cells can be selected for a question
       if (!targetCell || targetCell.owner !== 'none') return state;
 
-      // If clicking the already-selected cell, keep it selected
       if (next.selectedCellId === cellId && next.currentQuestion) {
         return state;
       }
@@ -201,6 +231,14 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
         next.usedQuestionIds.push(question.id);
       }
 
+      // Initialize new buzzer round with unique questionNonce
+      const nextNonce = state.buzzer.questionNonce + 1;
+      next.buzzer = createBuzzerState(
+        next.settings.autoOpenBuzzerOnQuestion ? 'open' : 'locked',
+        nextNonce,
+        next.settings.answerTimerSeconds
+      );
+
       next.timerRemaining = next.settings.timerSeconds;
       next.timerRunning = next.settings.timerSeconds > 0;
       return next;
@@ -213,6 +251,11 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       next.answerRevealed = false;
       next.timerRunning = false;
       next.timerRemaining = next.settings.timerSeconds;
+      next.buzzer = createBuzzerState(
+        'idle',
+        state.buzzer.questionNonce + 1,
+        next.settings.answerTimerSeconds
+      );
       return next;
     }
 
@@ -220,6 +263,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       if (!next.currentQuestion && next.selectedCellId === null) return state;
       next.answerRevealed = true;
       next.timerRunning = false;
+      next.buzzer.answerTimerRunning = false;
       return next;
     }
 
@@ -246,8 +290,126 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
         next.usedQuestionIds.push(question.id);
       }
 
+      // New unique questionNonce for the new question
+      const nextNonce = state.buzzer.questionNonce + 1;
+      next.buzzer = createBuzzerState(
+        next.settings.autoOpenBuzzerOnQuestion ? 'open' : 'locked',
+        nextNonce,
+        next.settings.answerTimerSeconds
+      );
+
       next.timerRemaining = next.settings.timerSeconds;
       next.timerRunning = next.settings.timerSeconds > 0;
+      return next;
+    }
+
+    case 'BUZZ_OPEN': {
+      if (next.phase !== 'playing' || next.selectedCellId === null) return state;
+      // If both teams are already locked out, reset lockedOutTeams so they can buzz
+      if (next.buzzer.lockedOutTeams.length >= 2) {
+        next.buzzer.lockedOutTeams = [];
+      }
+      next.buzzer.status = 'open';
+      next.buzzer.winner = null;
+      next.buzzer.winnerTimestamp = null;
+      next.buzzer.answerTimerRemaining = next.settings.answerTimerSeconds;
+      next.buzzer.answerTimerRunning = false;
+      return next;
+    }
+
+    case 'BUZZ_LOCK': {
+      if (next.selectedCellId === null) return state;
+      next.buzzer.status = 'locked';
+      next.buzzer.winner = null;
+      next.buzzer.winnerTimestamp = null;
+      next.buzzer.answerTimerRunning = false;
+      return next;
+    }
+
+    case 'BUZZ_PRESS': {
+      // Atomic server-authoritative buzzer press resolution:
+      // 1. Must be in 'playing' phase with an active selected cell
+      if (next.phase !== 'playing' || next.selectedCellId === null) {
+        return state;
+      }
+      // 2. Buzzer must currently be 'open' and have no winner yet
+      if (next.buzzer.status !== 'open' || next.buzzer.winner !== null) {
+        return state;
+      }
+      // 3. Reject stale presses from a previous questionNonce
+      if (
+        typeof action.payload.questionNonce === 'number' &&
+        action.payload.questionNonce !== next.buzzer.questionNonce
+      ) {
+        return state;
+      }
+      const pressingTeam = action.payload.team;
+      if (pressingTeam !== 'team1' && pressingTeam !== 'team2') {
+        return state;
+      }
+      // 4. Reject if this team already answered wrong on the current question
+      if (next.buzzer.lockedOutTeams.includes(pressingTeam)) {
+        return state;
+      }
+
+      // Lock the buzzer atomically for the winning team!
+      next.buzzer.status = 'locked_by_winner';
+      next.buzzer.winner = pressingTeam;
+      next.buzzer.winnerTimestamp = now;
+      next.buzzer.answerTimerRemaining = next.settings.answerTimerSeconds || 10;
+      next.buzzer.answerTimerRunning = true;
+      // Pause general question timer while team answers
+      next.timerRunning = false;
+      return next;
+    }
+
+    case 'BUZZ_CORRECT_ANSWER': {
+      // Award the selected cell to the team that won the buzzer
+      if (
+        next.phase !== 'playing' ||
+        next.selectedCellId === null ||
+        next.buzzer.winner === null
+      ) {
+        return state;
+      }
+      return claimCellForTeam(next, next.selectedCellId, next.buzzer.winner, now);
+    }
+
+    case 'BUZZ_WRONG_ANSWER': {
+      if (
+        next.phase !== 'playing' ||
+        next.selectedCellId === null ||
+        next.buzzer.winner === null
+      ) {
+        return state;
+      }
+      const wrongTeam = next.buzzer.winner;
+      if (!next.buzzer.lockedOutTeams.includes(wrongTeam)) {
+        next.buzzer.lockedOutTeams.push(wrongTeam);
+      }
+      next.buzzer.winner = null;
+      next.buzzer.winnerTimestamp = null;
+      next.buzzer.answerTimerRunning = false;
+      next.buzzer.answerTimerRemaining = next.settings.answerTimerSeconds || 10;
+
+      const otherTeam: TeamId = wrongTeam === 'team1' ? 'team2' : 'team1';
+      if (!next.buzzer.lockedOutTeams.includes(otherTeam)) {
+        // Automatically open the buzzer for the other team only!
+        next.buzzer.status = 'open';
+      } else {
+        // Both teams answered wrong on this question
+        next.buzzer.status = 'exhausted';
+      }
+      return next;
+    }
+
+    case 'BUZZ_RESET_RACE': {
+      if (next.selectedCellId === null) return state;
+      next.buzzer = createBuzzerState(
+        'open',
+        state.buzzer.questionNonce + 1,
+        next.settings.answerTimerSeconds
+      );
       return next;
     }
 
@@ -262,35 +424,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
         return state;
       }
 
-      const cell = next.cells[targetCellId];
-      if (!cell) return state;
-
-      const previousOwner = cell.owner;
-      const newOwner: TeamId = action.payload.team;
-      cell.owner = newOwner;
-
-      const teamName = newOwner === 'team1' ? next.team1.name : next.team2.name;
-      next.moveHistory.push({
-        id: `move_${now}_${next.moveHistory.length + 1}`,
-        timestamp: now,
-        round: next.currentRound,
-        cellId: targetCellId,
-        letter: cell.letter,
-        previousOwner,
-        newOwner,
-        description: `منح حرف (${cell.letter}) لـ ${teamName}`,
-      });
-
-      // Clear active selection and question
-      next.selectedCellId = null;
-      next.currentQuestion = null;
-      next.questionExhaustedForLetter = false;
-      next.answerRevealed = false;
-      next.timerRunning = false;
-      next.timerRemaining = next.settings.timerSeconds;
-
-      // Check if this move created a winning connected path
-      return evaluateAndApplyVictory(next, now);
+      return claimCellForTeam(next, targetCellId, action.payload.team, now);
     }
 
     case 'CORRECT_CELL_OWNER': {
@@ -324,13 +458,17 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
         next.selectedCellId = null;
         next.currentQuestion = null;
         next.answerRevealed = false;
+        next.buzzer = createBuzzerState(
+          'idle',
+          state.buzzer.questionNonce + 1,
+          next.settings.answerTimerSeconds
+        );
       }
 
       return evaluateAndApplyVictory(next, now);
     }
 
     case 'UNDO_MOVE': {
-      // Find the last move in the current round
       const currentRoundMoves = next.moveHistory.filter(
         (m) => m.round === next.currentRound
       );
@@ -347,7 +485,6 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
         cell.owner = lastMove.previousOwner;
       }
 
-      // If we were in round_victory or match_victory from that move, revert the round win!
       if (next.phase === 'round_victory' || next.phase === 'match_victory') {
         const lastRoundRecord = next.roundHistory[next.roundHistory.length - 1];
         if (lastRoundRecord && lastRoundRecord.roundNumber === next.currentRound) {
@@ -375,6 +512,11 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       next.winningTeam = null;
       next.winningPath = [];
       next.moveHistory = next.moveHistory.filter((m) => m.round !== next.currentRound);
+      next.buzzer = createBuzzerState(
+        'idle',
+        state.buzzer.questionNonce + 1,
+        next.settings.answerTimerSeconds
+      );
       next.timerRunning = false;
       next.timerRemaining = next.settings.timerSeconds;
       next.phase = 'playing';
@@ -382,7 +524,6 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
     }
 
     case 'REPLAY_ROUND': {
-      // If current round already recorded a win, revert that win count before replaying
       const existingWinIdx = next.roundHistory.findIndex(
         (r) => r.roundNumber === next.currentRound
       );
@@ -404,6 +545,11 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       next.winningTeam = null;
       next.winningPath = [];
       next.moveHistory = next.moveHistory.filter((m) => m.round !== next.currentRound);
+      next.buzzer = createBuzzerState(
+        'idle',
+        state.buzzer.questionNonce + 1,
+        next.settings.answerTimerSeconds
+      );
       next.timerRunning = false;
       next.timerRemaining = next.settings.timerSeconds;
       next.phase = 'playing';
@@ -420,6 +566,11 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       next.answerRevealed = false;
       next.winningTeam = null;
       next.winningPath = [];
+      next.buzzer = createBuzzerState(
+        'idle',
+        state.buzzer.questionNonce + 1,
+        next.settings.answerTimerSeconds
+      );
       next.timerRunning = false;
       next.timerRemaining = next.settings.timerSeconds;
       next.phase = 'playing';
@@ -435,6 +586,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       if (next.phase === 'playing') {
         next.phase = 'paused';
         next.timerRunning = false;
+        next.buzzer.answerTimerRunning = false;
       } else if (next.phase === 'paused') {
         next.phase = 'playing';
       }
@@ -465,15 +617,28 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
     }
 
     case 'TIMER_TICK': {
-      if (!next.timerRunning) return state;
-      if (next.timerRemaining > 0) {
+      let changed = false;
+      if (next.timerRunning && next.timerRemaining > 0) {
         next.timerRemaining -= 1;
+        changed = true;
+        if (next.timerRemaining <= 0) {
+          next.timerRemaining = 0;
+          next.timerRunning = false;
+        }
       }
-      if (next.timerRemaining <= 0) {
-        next.timerRemaining = 0;
-        next.timerRunning = false;
+      if (
+        next.buzzer.status === 'locked_by_winner' &&
+        next.buzzer.answerTimerRunning &&
+        next.buzzer.answerTimerRemaining > 0
+      ) {
+        next.buzzer.answerTimerRemaining -= 1;
+        changed = true;
+        if (next.buzzer.answerTimerRemaining <= 0) {
+          next.buzzer.answerTimerRemaining = 0;
+          next.buzzer.answerTimerRunning = false;
+        }
       }
-      return next;
+      return changed ? next : state;
     }
 
     case 'UPDATE_SETTINGS': {
@@ -484,6 +649,9 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       if (typeof action.payload.timerSeconds === 'number') {
         next.timerRemaining = action.payload.timerSeconds;
         next.timerRunning = false;
+      }
+      if (typeof action.payload.answerTimerSeconds === 'number') {
+        next.buzzer.answerTimerRemaining = action.payload.answerTimerSeconds;
       }
       return next;
     }
@@ -503,6 +671,46 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
   }
 }
 
+function claimCellForTeam(
+  next: RoomGameState,
+  targetCellId: number,
+  newOwner: TeamId,
+  now: number
+): RoomGameState {
+  const cell = next.cells[targetCellId];
+  if (!cell) return next;
+
+  const previousOwner = cell.owner;
+  cell.owner = newOwner;
+
+  const teamName = newOwner === 'team1' ? next.team1.name : next.team2.name;
+  next.moveHistory.push({
+    id: `move_${now}_${next.moveHistory.length + 1}`,
+    timestamp: now,
+    round: next.currentRound,
+    cellId: targetCellId,
+    letter: cell.letter,
+    previousOwner,
+    newOwner,
+    description: `منح حرف (${cell.letter}) لـ ${teamName}`,
+  });
+
+  // Clear active selection, question, and reset buzzer for next question
+  next.selectedCellId = null;
+  next.currentQuestion = null;
+  next.questionExhaustedForLetter = false;
+  next.answerRevealed = false;
+  next.timerRunning = false;
+  next.timerRemaining = next.settings.timerSeconds;
+  next.buzzer = createBuzzerState(
+    'idle',
+    next.buzzer.questionNonce + 1,
+    next.settings.answerTimerSeconds
+  );
+
+  return evaluateAndApplyVictory(next, now);
+}
+
 /**
  * Helper to evaluate win condition after any cell ownership change.
  */
@@ -520,8 +728,8 @@ function evaluateAndApplyVictory(state: RoomGameState, now: number): RoomGameSta
   state.winningTeam = winResult.winner;
   state.winningPath = winResult.winningPath;
   state.timerRunning = false;
+  state.buzzer.answerTimerRunning = false;
 
-  // Record round win if not already recorded for this round
   const alreadyRecorded = state.roundHistory.some(
     (r) => r.roundNumber === state.currentRound
   );

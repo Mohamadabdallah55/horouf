@@ -197,6 +197,82 @@ class SoundManager {
   }
 
   /**
+   * Short crisp tone when the buzzer race opens
+   */
+  public playBuzzerOpen(): void {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(660, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.08);
+
+    gain.gain.setValueAtTime(0.16, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.13);
+  }
+
+  /**
+   * Distinct game-show buzzer hit chime when a team buzzes in first
+   */
+  public playBuzzerWin(team: 'team1' | 'team2'): void {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const baseFreq = team === 'team1' ? 587.33 : 493.88; // D5 for Green, B4 for Orange
+    const highFreq = team === 'team1' ? 880 : 739.99;
+
+    [baseFreq, highFreq].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      const start = now + idx * 0.05;
+      osc.frequency.setValueAtTime(freq, start);
+
+      gain.gain.setValueAtTime(0.24, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.25);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.26);
+    });
+  }
+
+  /**
+   * Short low double-tone when a team gives a wrong answer and opportunity passes to the other team
+   */
+  public playWrongAnswer(): void {
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    [261.63, 207.65].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      const start = now + idx * 0.11;
+      osc.frequency.setValueAtTime(freq, start);
+
+      gain.gain.setValueAtTime(0.14, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.16);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.18);
+    });
+  }
+
+  /**
    * Broadcast victory fanfare stinger (no music, short celebratory arpeggio)
    */
   public playVictoryFanfare(): void {

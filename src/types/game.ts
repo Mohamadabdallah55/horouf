@@ -1,5 +1,6 @@
 export type TeamId = 'team1' | 'team2';
 export type CellOwner = 'none' | TeamId;
+export type ClientRole = 'studio' | 'display' | 'team1' | 'team2';
 
 export type QuestionCategory =
   | 'معلومات عامة'
@@ -53,6 +54,8 @@ export interface TeamConfig {
 export interface GameSettings {
   totalRounds: number; // 1, 3, 5, 7
   timerSeconds: number; // 0 = disabled, or 15, 30, 45, 60
+  answerTimerSeconds: number; // Countdown after buzzing in, default 10s
+  autoOpenBuzzerOnQuestion: boolean; // Automatically open buzzer when question appears
   theme: VisualThemeId;
   fontFamily: FontFamilyId;
   selectedCategories: QuestionCategory[];
@@ -66,6 +69,33 @@ export type GamePhase =
   | 'paused'
   | 'round_victory'
   | 'match_victory';
+
+export type BuzzerStatus =
+  | 'idle' // No question selected yet
+  | 'locked' // Question selected, waiting for host to open buzzer (or locked manually)
+  | 'open' // Active race! Eligible teams can press
+  | 'locked_by_winner' // A team buzzed in first and is answering
+  | 'exhausted'; // Both teams answered wrong on this question
+
+export interface BuzzerState {
+  status: BuzzerStatus;
+  questionNonce: number; // Unique monotonically increasing ID per question to reject stale buzzes
+  winner: TeamId | null;
+  winnerTimestamp: number | null;
+  lockedOutTeams: TeamId[]; // Teams that already answered wrong on the current question
+  answerTimerRemaining: number;
+  answerTimerRunning: boolean;
+}
+
+export interface RoomPresence {
+  displays: number;
+  studios: number;
+  team1Connected: boolean;
+  team2Connected: boolean;
+  team1DeviceId: string | null;
+  team2DeviceId: string | null;
+  total: number;
+}
 
 export interface RoundWinnerRecord {
   roundNumber: number;
@@ -96,6 +126,7 @@ export interface RoomGameState {
   team1: TeamConfig;
   team2: TeamConfig;
   settings: GameSettings;
+  buzzer: BuzzerState;
   timerRemaining: number;
   timerRunning: boolean;
   lastUpdatedAt: number;
@@ -103,7 +134,21 @@ export interface RoomGameState {
 }
 
 export type GameAction =
-  | { type: 'START_MATCH'; payload?: Partial<{ team1Name: string; team2Name: string; team1Color: string; team2Color: string; totalRounds: number; timerSeconds: number; theme: VisualThemeId; fontFamily: FontFamilyId }> }
+  | {
+      type: 'START_MATCH';
+      payload?: Partial<{
+        team1Name: string;
+        team2Name: string;
+        team1Color: string;
+        team2Color: string;
+        totalRounds: number;
+        timerSeconds: number;
+        answerTimerSeconds: number;
+        autoOpenBuzzerOnQuestion: boolean;
+        theme: VisualThemeId;
+        fontFamily: FontFamilyId;
+      }>;
+    }
   | { type: 'FINISH_ROUND_INTRO' }
   | { type: 'SELECT_CELL'; payload: { cellId: number } }
   | { type: 'DESELECT_CELL' }
@@ -123,5 +168,14 @@ export type GameAction =
   | { type: 'TIMER_PAUSE' }
   | { type: 'TIMER_RESET' }
   | { type: 'TIMER_TICK' }
+  | { type: 'BUZZ_OPEN' }
+  | { type: 'BUZZ_LOCK' }
+  | { type: 'BUZZ_PRESS'; payload: { team: TeamId; questionNonce?: number } }
+  | { type: 'BUZZ_CORRECT_ANSWER' }
+  | { type: 'BUZZ_WRONG_ANSWER' }
+  | { type: 'BUZZ_RESET_RACE' }
   | { type: 'UPDATE_SETTINGS'; payload: Partial<GameSettings> }
-  | { type: 'UPDATE_TEAMS'; payload: { team1?: Partial<TeamConfig>; team2?: Partial<TeamConfig> } };
+  | {
+      type: 'UPDATE_TEAMS';
+      payload: { team1?: Partial<TeamConfig>; team2?: Partial<TeamConfig> };
+    };

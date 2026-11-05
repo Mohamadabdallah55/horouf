@@ -1,56 +1,84 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HexBoard } from './components/HexBoard';
-import { HostMobileView } from './components/HostMobileView';
 import { RoomSyncModal } from './components/RoomSyncModal';
 import { SideControlPanel } from './components/SideControlPanel';
 import { StudioMenuDrawer } from './components/StudioMenuDrawer';
+import { TeamBuzzerScreen } from './components/TeamBuzzerScreen';
 import { TitleAndSetupModal } from './components/TitleAndSetupModal';
 import { VictoryModal } from './components/VictoryModal';
 import { applyGameAction, createInitialRoomState } from './game/gameEngine';
-import { CellOwner, GameAction, RoomGameState, TeamId } from './types/game';
+import {
+  CellOwner,
+  ClientRole,
+  GameAction,
+  RoomGameState,
+  RoomPresence,
+  TeamId,
+} from './types/game';
 import { soundFX } from './utils/soundEffects';
 
-function getInitialUrlParams() {
+function getOrCreateDeviceId(): string {
+  if (typeof window === 'undefined') return 'server_dev';
+  try {
+    let id = window.sessionStorage.getItem('elite_clash_device_id');
+    if (!id) {
+      id = `dev_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+      window.sessionStorage.setItem('elite_clash_device_id', id);
+    }
+    return id;
+  } catch {
+    return `dev_${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
+function getInitialUrlParams(): {
+  roomCode: string;
+  role: ClientRole;
+  autostart: boolean;
+} {
   if (typeof window === 'undefined') {
     return {
       roomCode: 'ELITE1',
-      role: 'studio' as 'studio' | 'display' | 'host',
-      pin: '2026',
+      role: 'studio',
       autostart: false,
     };
   }
   const params = new URLSearchParams(window.location.search);
   const roomCode = (params.get('room') || 'ELITE1').trim().toUpperCase();
-  const modeParam = params.get('mode');
-  const role: 'studio' | 'display' | 'host' =
-    modeParam === 'display' || modeParam === 'host' ? modeParam : 'studio';
-  const pin = params.get('pin') || '2026';
+  const modeParam = params.get('mode') || params.get('role');
+  let role: ClientRole = 'studio';
+  if (modeParam === 'team1' || modeParam === 'team2' || modeParam === 'display') {
+    role = modeParam;
+  }
   const autostart = params.get('autostart') === '1';
 
-  return { roomCode, role, pin, autostart };
+  return { roomCode, role, autostart };
 }
 
 export default function App() {
   const initialParams = getInitialUrlParams();
+  const [deviceId] = useState<string>(() => getOrCreateDeviceId());
 
-  const [role, setRole] = useState<'studio' | 'display' | 'host'>(
-    initialParams.role
-  );
+  const [role, setRole] = useState<ClientRole>(initialParams.role);
   const [roomCode, setRoomCode] = useState<string>(initialParams.roomCode);
-  const [hostPin] = useState<string>(initialParams.pin);
+  const [wsConnected, setWsConnected] = useState<boolean>(false);
+  const [authorized, setAuthorized] = useState<boolean>(true);
 
   const [gameState, setGameState] = useState<RoomGameState>(() =>
     createInitialRoomState(
       initialParams.roomCode,
-      initialParams.pin,
+      '2026',
       initialParams.autostart
     )
   );
 
-  const [presence, setPresence] = useState({
+  const [presence, setPresence] = useState<RoomPresence>({
     displays: 0,
-    hosts: 0,
     studios: 1,
+    team1Connected: false,
+    team2Connected: false,
+    team1DeviceId: null,
+    team2DeviceId: null,
     total: 1,
   });
 
@@ -62,6 +90,7 @@ export default function App() {
   const wsRef = useRef<WebSocket | null>(null);
   const prevPhaseRef = useRef(gameState.phase);
   const prevTimerRef = useRef(gameState.timerRemaining);
+  const prevBuzzerWinnerRef = useRef<TeamId | null>(null);
 
   // Sync body dataset state for testing & accessibility compliance
   useEffect(() => {
@@ -79,7 +108,7 @@ export default function App() {
     document.body.dataset.state = bodyState;
   }, [gameState.phase]);
 
-  // Trigger audio cues on phase or timer changes
+  // Play victory fanfare when round/match is won
   useEffect(() => {
     if (
       (gameState.phase === 'round_victory' ||
@@ -92,6 +121,18 @@ export default function App() {
     prevPhaseRef.current = gameState.phase;
   }, [gameState.phase]);
 
+  // Play sound cue when a team wins the buzzer race automatically
+  useEffect(() => {
+    if (
+      gameState.buzzer.winner &&
+      gameState.buzzer.winner !== prevBuzzerWinnerRef.current
+    ) {
+      soundFX.playBuzzerWin(gameState.buzzer.winner);
+    }
+    prevBuzzerWinnerRef.current = gameState.buzzer.winner;
+  }, [gameState.buzzer.winner]);
+
+  // Play timer ticks
   useEffect(() => {
     if (
       gameState.timerRunning &&
@@ -116,13 +157,17 @@ export default function App() {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${protocol}//${window.location.host}/ws?room=${encodeURIComponent(
         roomCode
-      )}&role=${encodeURIComponent(role)}${
-        initialParams.autostart ? '&autostart=1' : ''
-      }`;
+      )}&role=${encodeURIComponent(role)}&deviceId=${encodeURIComponent(
+        deviceId
+      )}${initialParams.autostart ? '&autostart=1' : ''}`;
 
       try {
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
+
+        ws.onopen = () => {
+          if (isMounted) setWsConnected(true);
+        };
 
         ws.onmessage = (event) => {
           try {
@@ -132,6 +177,9 @@ export default function App() {
               if (msg.presence) {
                 setPresence(msg.presence);
               }
+              if (typeof msg.authorized === 'boolean') {
+                setAuthorized(msg.authorized);
+              }
             }
           } catch {
             // ignore
@@ -140,11 +188,12 @@ export default function App() {
 
         ws.onclose = () => {
           if (isMounted) {
-            reconnectTimer = setTimeout(connectWs, 2000);
+            setWsConnected(false);
+            reconnectTimer = setTimeout(connectWs, 1500);
           }
         };
       } catch {
-        // Fallback if WebSocket creation fails
+        if (isMounted) setWsConnected(false);
       }
     };
 
@@ -158,16 +207,22 @@ export default function App() {
         wsRef.current = null;
       }
     };
-  }, [roomCode, role, initialParams.autostart]);
+  }, [roomCode, role, deviceId, initialParams.autostart]);
 
   // Local fallback timer interval in case server WS is disconnected
   useEffect(() => {
     const interval = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        return; // Server drives timer ticks when connected
+        return;
       }
       setGameState((prev) => {
-        if (prev.phase === 'playing' && prev.timerRunning && prev.timerRemaining > 0) {
+        if (prev.phase !== 'playing') return prev;
+        const isMain = prev.timerRunning && prev.timerRemaining > 0;
+        const isAns =
+          prev.buzzer.status === 'locked_by_winner' &&
+          prev.buzzer.answerTimerRunning &&
+          prev.buzzer.answerTimerRemaining > 0;
+        if (isMain || isAns) {
           return applyGameAction(prev, { type: 'TIMER_TICK' });
         }
         return prev;
@@ -177,13 +232,12 @@ export default function App() {
   }, []);
 
   /**
-   * Dispatches a GameAction optimistically and sends it to the server via WebSocket (or REST fallback)
+   * Dispatches a GameAction from the Main Screen (Studio)
    */
   const dispatchAction = useCallback(
     (action: GameAction) => {
-      if (role === 'display') return;
+      if (role !== 'studio') return;
 
-      // Play immediate feedback sound based on action type
       switch (action.type) {
         case 'SELECT_CELL':
         case 'NEW_QUESTION':
@@ -194,7 +248,15 @@ export default function App() {
           break;
         case 'CLAIM_CELL':
         case 'CORRECT_CELL_OWNER':
+        case 'BUZZ_CORRECT_ANSWER':
           soundFX.playClaimCell();
+          break;
+        case 'BUZZ_OPEN':
+        case 'BUZZ_RESET_RACE':
+          soundFX.playBuzzerOpen();
+          break;
+        case 'BUZZ_WRONG_ANSWER':
+          soundFX.playWrongAnswer();
           break;
         case 'UNDO_MOVE':
         case 'DESELECT_CELL':
@@ -202,16 +264,14 @@ export default function App() {
           break;
       }
 
-      // Apply optimistically
+      // Apply optimistically on Main Screen
       setGameState((prev) => applyGameAction(prev, action));
 
-      // Send over WebSocket if open, otherwise POST to REST endpoint
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(
           JSON.stringify({
             type: 'ACTION',
             action,
-            pin: hostPin,
           })
         );
       } else {
@@ -220,8 +280,7 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action,
-            role,
-            pin: hostPin,
+            role: 'studio',
           }),
         })
           .then((r) => (r.ok ? r.json() : null))
@@ -232,11 +291,87 @@ export default function App() {
           .catch(() => {});
       }
     },
-    [role, roomCode, hostPin]
+    [role, roomCode]
   );
 
-  // Global keyboard shortcuts (Enter/Space on Title, M to mute, Esc to close modals)
+  /**
+   * Sends a BUZZ_PRESS from Team 1 or Team 2 Device to the server.
+   * Server arrival order strictly determines the winner.
+   */
+  const handleTeamBuzzPress = useCallback(
+    (questionNonce: number) => {
+      if (role !== 'team1' && role !== 'team2') return;
+
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: 'BUZZ_PRESS',
+            questionNonce,
+          })
+        );
+      } else {
+        fetch(`/api/rooms/${encodeURIComponent(roomCode)}/action`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            role,
+            action: {
+              type: 'BUZZ_PRESS',
+              payload: { team: role, questionNonce },
+            },
+          }),
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (data?.state) setGameState(data.state);
+            if (data?.presence) setPresence(data.presence);
+          })
+          .catch(() => {});
+      }
+    },
+    [role, roomCode]
+  );
+
+  const handleResetTeamDevice = useCallback(
+    (team: TeamId | 'both') => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.send(
+          JSON.stringify({
+            type: 'RESET_TEAM_DEVICE',
+            team,
+          })
+        );
+      } else {
+        fetch(`/api/rooms/${encodeURIComponent(roomCode)}/reset-device`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ team }),
+        }).catch(() => {});
+      }
+    },
+    [roomCode]
+  );
+
+  const handleCreateNewRoom = useCallback(() => {
+    fetch('/api/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.roomCode) {
+          setRoomCode(data.roomCode);
+          if (data.state) setGameState(data.state);
+          if (data.presence) setPresence(data.presence);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Global keyboard shortcuts on Main Screen
   useEffect(() => {
+    if (role !== 'studio') return;
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       const isInput =
@@ -268,6 +403,7 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
+    role,
     gameState.phase,
     gameState.selectedCellId,
     menuDrawerOpen,
@@ -281,7 +417,7 @@ export default function App() {
     setIsMuted(nextMuted);
   };
 
-  const handleSwitchRole = (newRole: 'studio' | 'display' | 'host') => {
+  const handleSwitchRole = (newRole: ClientRole) => {
     setRole(newRole);
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'SWITCH_ROLE', role: newRole }));
@@ -293,28 +429,50 @@ export default function App() {
     setSyncModalOpen(false);
   };
 
-  // If user is in dedicated Mobile Host Controller Mode (?mode=host)
-  if (role === 'host') {
+  // Device 2 (Green Team) or Device 3 (Orange Team) Fullscreen Buzzer View
+  if (role === 'team1' || role === 'team2') {
     return (
-      <HostMobileView
+      <TeamBuzzerScreen
+        teamId={role}
         state={gameState}
-        presence={presence}
-        onDispatch={dispatchAction}
-        onSwitchToStudio={() => handleSwitchRole('studio')}
+        wsConnected={wsConnected}
+        authorized={authorized}
+        onBuzzPress={handleTeamBuzzPress}
       />
     );
   }
 
   const isDisplayOnly = role === 'display';
+  const buzzerWinner = gameState.buzzer.winner;
+  const buzzerWinnerTeam =
+    buzzerWinner === 'team1'
+      ? gameState.team1
+      : buzzerWinner === 'team2'
+      ? gameState.team2
+      : null;
 
   return (
     <main
       dir="ltr"
+      data-buzzer-winner={buzzerWinner || 'none'}
       className="fixed inset-0 w-screen h-screen overflow-hidden flex flex-col md:flex-row bg-[#1e1035]"
       style={{
         fontFamily: `'${gameState.settings.fontFamily}', 'Cairo', 'Tajawal', sans-serif`,
       }}
     >
+      {/* Illuminated Screen Border Overlay when a Team Wins the Buzzer Race */}
+      {gameState.buzzer.status === 'locked_by_winner' && buzzerWinnerTeam && (
+        <div
+          aria-hidden="true"
+          data-testid="main-screen-buzzer-border"
+          style={{
+            borderColor: buzzerWinnerTeam.color,
+            boxShadow: `inset 0 0 45px ${buzzerWinnerTeam.color}, 0 0 35px ${buzzerWinnerTeam.color}`,
+          }}
+          className="pointer-events-none fixed inset-0 z-30 border-[10px] transition-all duration-200"
+        />
+      )}
+
       {/* Title & Match Setup Screen */}
       {gameState.phase === 'title' && !isDisplayOnly && (
         <TitleAndSetupModal
@@ -330,7 +488,7 @@ export default function App() {
         />
       )}
 
-      {/* Left 68% Arena: 25-Hexagon Board (Matches Reference Screenshot Layout) */}
+      {/* Left 68% Arena: 25-Hexagon Board */}
       <section
         className="w-full md:w-[68%] lg:w-[70%] h-[56%] md:h-full relative overflow-hidden"
         aria-label="ساحة اللوحة السداسية"
@@ -356,16 +514,33 @@ export default function App() {
             })
           }
         />
+
+        {/* Floating Buzzer Race Winner Toast on Top of Board Arena */}
+        {gameState.buzzer.status === 'locked_by_winner' && buzzerWinnerTeam && (
+          <div
+            dir="rtl"
+            data-testid="board-buzzer-announcement"
+            style={{
+              backgroundColor: buzzerWinnerTeam.color,
+            }}
+            className="pointer-events-none absolute top-4 left-1/2 -translate-x-1/2 z-20 px-6 py-2.5 rounded-2xl text-slate-950 font-black text-lg sm:text-xl shadow-2xl border-4 border-white flex items-center gap-3"
+          >
+            <span>🔔 {buzzerWinnerTeam.name} ضغط أولًا!</span>
+            <span className="px-3 py-0.5 rounded-xl bg-slate-950 text-amber-300 font-mono text-base tabular-nums">
+              {gameState.buzzer.answerTimerRemaining}ث
+            </span>
+          </div>
+        )}
       </section>
 
-      {/* Right 32% Panel: Question Box, Answer Reveal, and Team Claim Bars */}
+      {/* Right 32% Panel: Question Box, Buzzer Controls, Answer Reveal, and Team Claim Bars */}
       <section className="w-full md:w-[32%] lg:w-[30%] h-[44%] md:h-full relative z-10">
         <SideControlPanel
           state={gameState}
+          presence={presence}
           isDisplayOnly={isDisplayOnly}
           isMuted={isMuted}
           correctionMode={correctionMode}
-          connectedDevicesCount={presence.total}
           onRevealOrHideAnswer={() =>
             dispatchAction({
               type: gameState.answerRevealed ? 'HIDE_ANSWER' : 'REVEAL_ANSWER',
@@ -381,15 +556,19 @@ export default function App() {
           onToggleMute={handleToggleMute}
           onOpenMenuDrawer={() => setMenuDrawerOpen(true)}
           onOpenSyncModal={() => setSyncModalOpen(true)}
-          onToggleDisplayMode={() =>
-            handleSwitchRole(isDisplayOnly ? 'studio' : 'display')
-          }
           onTimerToggle={() =>
             dispatchAction({
               type: gameState.timerRunning ? 'TIMER_PAUSE' : 'TIMER_START',
             })
           }
           onTimerReset={() => dispatchAction({ type: 'TIMER_RESET' })}
+          onBuzzerOpen={() => dispatchAction({ type: 'BUZZ_OPEN' })}
+          onBuzzerLock={() => dispatchAction({ type: 'BUZZ_LOCK' })}
+          onBuzzerCorrectAnswer={() =>
+            dispatchAction({ type: 'BUZZ_CORRECT_ANSWER' })
+          }
+          onBuzzerWrongAnswer={() => dispatchAction({ type: 'BUZZ_WRONG_ANSWER' })}
+          onBuzzerResetRace={() => dispatchAction({ type: 'BUZZ_RESET_RACE' })}
         />
       </section>
 
@@ -439,7 +618,7 @@ export default function App() {
         />
       )}
 
-      {/* Room QR & Multi-Device Sync Modal */}
+      {/* Buzzer Room & QR Pairing Modal */}
       {syncModalOpen && (
         <RoomSyncModal
           state={gameState}
@@ -448,6 +627,11 @@ export default function App() {
           onClose={() => setSyncModalOpen(false)}
           onSwitchRole={handleSwitchRole}
           onJoinRoom={handleJoinRoom}
+          onCreateNewRoom={handleCreateNewRoom}
+          onResetTeamDevice={handleResetTeamDevice}
+          onUpdateSettings={(partial) =>
+            dispatchAction({ type: 'UPDATE_SETTINGS', payload: partial })
+          }
         />
       )}
     </main>

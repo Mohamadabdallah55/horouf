@@ -221,15 +221,16 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
             بنك يضم 336 سؤالاً موثقًا.
           </p>
 
-          {/* Secondary Mode Buttons: Display Mode & Mobile Host QR */}
+          {/* Secondary Mode Buttons: Activate Buzzer & Display Mode */}
           <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 pt-1">
             <button
               type="button"
               onClick={onOpenSyncModal}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-[#230E3B] hover:bg-[#2d134b] text-amber-300 border border-amber-400/40 font-extrabold text-sm transition cursor-pointer shadow-lg"
+              data-testid="title-btn-activate-buzzer"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-sm transition cursor-pointer shadow-lg"
             >
               <Smartphone className="w-4 h-4" />
-              <span>التحكم من الجوال (رمز الغرفة: {state.roomCode})</span>
+              <span>تفعيل الجرس وربط الفريقين (غرفة: {state.roomCode})</span>
             </button>
 
             <button
@@ -238,7 +239,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
               className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-extrabold text-sm transition cursor-pointer"
             >
               <Tv className="w-4 h-4" />
-              <span>وضع شاشة العرض التلفزيونية</span>
+              <span>وضع شاشة العرض فقط</span>
             </button>
           </div>
         </div>

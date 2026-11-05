@@ -1,29 +1,30 @@
 import React from 'react';
 import {
+  Bell,
   Check,
+  Lock,
   Maximize2,
   Menu,
   Play,
   Pause,
   RotateCcw,
-  Smartphone,
   Undo2,
   Volume2,
   VolumeX,
   Wrench,
   X,
-  Eye,
+  XCircle,
 } from 'lucide-react';
 import { getArabicRoundTitle } from '../game/gameEngine';
 import { getRoundedHexPath } from '../game/hexMath';
-import { RoomGameState, TeamId } from '../types/game';
+import { RoomGameState, RoomPresence, TeamId } from '../types/game';
 
 interface SideControlPanelProps {
   state: RoomGameState;
+  presence: RoomPresence;
   isDisplayOnly: boolean;
   isMuted: boolean;
   correctionMode: boolean;
-  connectedDevicesCount: number;
   onRevealOrHideAnswer: () => void;
   onNewQuestion: () => void;
   onDeselectCell: () => void;
@@ -33,17 +34,21 @@ interface SideControlPanelProps {
   onToggleMute: () => void;
   onOpenMenuDrawer: () => void;
   onOpenSyncModal: () => void;
-  onToggleDisplayMode: () => void;
   onTimerToggle: () => void;
   onTimerReset: () => void;
+  onBuzzerOpen: () => void;
+  onBuzzerLock: () => void;
+  onBuzzerCorrectAnswer: () => void;
+  onBuzzerWrongAnswer: () => void;
+  onBuzzerResetRace: () => void;
 }
 
 export const SideControlPanel: React.FC<SideControlPanelProps> = ({
   state,
+  presence,
   isDisplayOnly,
   isMuted,
   correctionMode,
-  connectedDevicesCount,
   onRevealOrHideAnswer,
   onNewQuestion,
   onDeselectCell,
@@ -53,9 +58,13 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
   onToggleMute,
   onOpenMenuDrawer,
   onOpenSyncModal,
-  onToggleDisplayMode,
   onTimerToggle,
   onTimerReset,
+  onBuzzerOpen,
+  onBuzzerLock,
+  onBuzzerCorrectAnswer,
+  onBuzzerWrongAnswer,
+  onBuzzerResetRace,
 }) => {
   const selectedCell =
     state.selectedCellId !== null ? state.cells[state.selectedCellId] : null;
@@ -65,6 +74,14 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
 
   const hasSelection = selectedCell !== null;
   const canUndo = state.moveHistory.some((m) => m.round === state.currentRound);
+  const buzzer = state.buzzer;
+
+  const buzzerWinnerTeam =
+    buzzer.winner === 'team1'
+      ? state.team1
+      : buzzer.winner === 'team2'
+      ? state.team2
+      : null;
 
   const panelBg =
     state.settings.theme === 'elite_clash'
@@ -98,15 +115,15 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
   return (
     <aside
       dir="rtl"
-      className={`w-full h-full flex flex-col justify-between px-5 py-4 select-none ${panelBg} text-white relative overflow-y-auto`}
+      className={`w-full h-full flex flex-col justify-between px-4 py-3 select-none ${panelBg} text-white relative overflow-y-auto`}
       aria-label="لوحة التحكم والأسئلة"
     >
       {/* Top Header: Round Title + Studio Menu Button */}
-      <div className="flex flex-col gap-2.5 shrink-0">
+      <div className="flex flex-col gap-2 shrink-0">
         <div className="flex items-start justify-between gap-2">
           {/* Stylized 3D Broadcast Round Title */}
           <div className="flex flex-col leading-none pr-1">
-            <div className="text-[11px] font-bold tracking-wider text-amber-300/90 mb-1">
+            <div className="text-[11px] font-bold tracking-wider text-amber-300/90 mb-0.5">
               ELITE CLASH · الجولة {state.currentRound} من {state.settings.totalRounds}
             </div>
             <div
@@ -116,17 +133,17 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
               }}
             >
               <div
-                className="text-3xl xl:text-4xl font-black text-[#FF5733] tracking-tight"
+                className="text-2xl xl:text-3xl font-black text-[#FF5733] tracking-tight"
                 style={{
-                  textShadow: '0 4px 0 #230E3B, 0 6px 10px rgba(0,0,0,0.35)',
+                  textShadow: '0 3px 0 #230E3B, 0 5px 8px rgba(0,0,0,0.35)',
                 }}
               >
                 {roundFirstWord}
               </div>
               <div
-                className="text-3xl xl:text-4xl font-black text-[#FFD700] -mt-1 mr-3 tracking-tight"
+                className="text-2xl xl:text-3xl font-black text-[#FFD700] -mt-1 mr-3 tracking-tight"
                 style={{
-                  textShadow: '0 4px 0 #230E3B, 0 6px 10px rgba(0,0,0,0.35)',
+                  textShadow: '0 3px 0 #230E3B, 0 5px 8px rgba(0,0,0,0.35)',
                 }}
               >
                 {roundSecondWord}
@@ -135,44 +152,44 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
           </div>
 
           {/* Right Action Cluster */}
-          <div className="flex items-center gap-2">
-            {isDisplayOnly ? (
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleFullscreen}
-                  title="ملء الشاشة"
-                  aria-label="ملء الشاشة"
-                  className="p-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white transition cursor-pointer"
-                >
-                  <Maximize2 className="w-5 h-5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={onToggleDisplayMode}
-                  title="العودة لوضع الاستوديو والمقدم"
-                  aria-label="العودة لوضع المقدم"
-                  className="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs transition cursor-pointer shadow"
-                >
-                  وضع المقدم
-                </button>
-              </div>
-            ) : (
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleFullscreen}
+              title="ملء الشاشة"
+              aria-label="ملء الشاشة"
+              className="w-10 h-10 rounded-xl bg-[#230E3B]/75 hover:bg-[#230E3B] text-white flex items-center justify-center transition cursor-pointer border border-white/15"
+            >
+              <Maximize2 className="w-4 h-4" />
+            </button>
+
+            {!isDisplayOnly && (
               <button
                 type="button"
                 onClick={onOpenMenuDrawer}
                 aria-label="القائمة وإعدادات المباراة"
-                className="w-12 h-12 rounded-2xl bg-white text-[#230E3B] shadow-[0_5px_0_#cbd5e1] active:translate-y-0.5 active:shadow-[0_2px_0_#cbd5e1] flex items-center justify-center transition cursor-pointer hover:bg-slate-50"
+                className="w-11 h-11 rounded-2xl bg-white text-[#230E3B] shadow-[0_4px_0_#cbd5e1] active:translate-y-0.5 flex items-center justify-center transition cursor-pointer hover:bg-slate-50"
               >
-                <Menu className="w-7 h-7 stroke-[2.75]" />
+                <Menu className="w-6 h-6 stroke-[2.75]" />
               </button>
             )}
           </div>
         </div>
 
-        {/* Host Quick Utility Strip (Hidden in Audience Display Mode) */}
+        {/* Host Quick Utility Strip + Activate Buzzer Button */}
         {!isDisplayOnly && (
-          <div className="grid grid-cols-4 gap-1.5 pt-1">
+          <div className="grid grid-cols-4 gap-1.5">
+            <button
+              type="button"
+              onClick={onOpenSyncModal}
+              data-testid="btn-activate-buzzer"
+              aria-label="تفعيل الجرس وربط الأجهزة"
+              className="col-span-2 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl text-xs font-black bg-amber-400 hover:bg-amber-300 text-slate-950 shadow transition cursor-pointer"
+            >
+              <Bell className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">تفعيل الجرس ({state.roomCode})</span>
+            </button>
+
             <button
               type="button"
               onClick={onUndoMove}
@@ -188,39 +205,19 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
               <span className="truncate">تراجع</span>
             </button>
 
-            <button
-              type="button"
-              onClick={onToggleCorrectionMode}
-              aria-label="تصحيح ملكية الخلايا"
-              className={`flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl text-xs font-bold transition cursor-pointer border ${
-                correctionMode
-                  ? 'bg-amber-400 text-slate-950 border-amber-200 shadow'
-                  : 'bg-[#230E3B]/80 hover:bg-[#230E3B] text-white border-white/15'
-              }`}
-            >
-              <Wrench className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">تصحيح</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onOpenSyncModal}
-              aria-label="ربط الجوال ورمز الغرفة"
-              className="flex items-center justify-center gap-1 py-1.5 px-2 rounded-xl text-xs font-bold bg-[#230E3B]/80 hover:bg-[#230E3B] text-amber-300 border border-amber-400/30 transition cursor-pointer"
-            >
-              <Smartphone className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">الجوال ({connectedDevicesCount})</span>
-            </button>
-
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={onToggleDisplayMode}
-                title="تفعيل وضع شاشة العرض للجمهور (إخفاء أزرار المقدم)"
-                aria-label="تفعيل وضع العرض"
-                className="flex-1 flex items-center justify-center py-1.5 px-1.5 rounded-xl text-xs font-bold bg-[#230E3B]/80 hover:bg-[#230E3B] text-cyan-300 border border-cyan-400/25 transition cursor-pointer"
+                onClick={onToggleCorrectionMode}
+                title="تصحيح ملكية الخلايا"
+                aria-label="تصحيح ملكية الخلايا"
+                className={`flex-1 flex items-center justify-center py-1.5 px-1.5 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                  correctionMode
+                    ? 'bg-amber-400 text-slate-950 border-amber-200 shadow'
+                    : 'bg-[#230E3B]/80 hover:bg-[#230E3B] text-white border-white/15'
+                }`}
               >
-                <Eye className="w-3.5 h-3.5" />
+                <Wrench className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
@@ -238,16 +235,46 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
             </div>
           </div>
         )}
+
+        {/* Live Team Buzzer Connection Status Strip */}
+        <div
+          className="rounded-xl bg-[#230E3B]/85 border border-white/10 px-3 py-1.5 flex items-center justify-between text-[11px] font-bold"
+          data-testid="buzzer-connection-strip"
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="text-white/70">جرس {state.team1.name}:</span>
+            <span
+              data-testid="status-team1-conn"
+              className={
+                presence.team1Connected ? 'text-emerald-400 font-black' : 'text-white/45'
+              }
+            >
+              {presence.team1Connected ? 'متصل' : 'غير متصل'}
+            </span>
+          </div>
+          <span className="text-white/25">·</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-white/70">جرس {state.team2.name}:</span>
+            <span
+              data-testid="status-team2-conn"
+              className={
+                presence.team2Connected ? 'text-orange-400 font-black' : 'text-white/45'
+              }
+            >
+              {presence.team2Connected ? 'متصل' : 'غير متصل'}
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Center Dark Purple Question Container */}
+      {/* Center Dark Purple Question & Buzzer Container */}
       <div
-        className={`my-2 flex-1 flex flex-col justify-between rounded-[28px] p-4 pt-7 relative shadow-2xl ${cardOuterBg}`}
+        className={`my-1.5 flex-1 flex flex-col justify-between rounded-[26px] p-3.5 pt-6 relative shadow-2xl ${cardOuterBg}`}
       >
         {/* Top Floating Letter Hexagon Badge */}
         <div className="relative flex-1 flex flex-col">
           <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-10 flex items-center justify-center">
-            <svg width="68" height="74" viewBox="0 0 80 88" aria-hidden="true">
+            <svg width="62" height="68" viewBox="0 0 80 88" aria-hidden="true">
               <path
                 d={getRoundedHexPath(40, 44, 36, 6)}
                 fill="#FFFFFF"
@@ -286,7 +313,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
 
           {/* Inner Question Card */}
           <div
-            className={`w-full flex-1 rounded-2xl border px-4 pt-9 pb-3 flex flex-col items-center justify-between text-center ${cardInnerBg}`}
+            className={`w-full flex-1 rounded-2xl border px-3.5 pt-8 pb-2.5 flex flex-col items-center justify-between text-center ${cardInnerBg}`}
           >
             {/* Category & Timer Header */}
             <div className="w-full flex items-center justify-between text-xs text-purple-200/80 px-1">
@@ -297,9 +324,9 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
               </span>
 
               {state.settings.timerSeconds > 0 && hasSelection && (
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1">
                   <span
-                    className={`font-mono font-extrabold text-sm tabular-nums ${
+                    className={`font-mono font-extrabold text-xs tabular-nums ${
                       state.timerRemaining <= 5
                         ? 'text-rose-400 animate-pulse'
                         : 'text-amber-300'
@@ -338,16 +365,16 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
 
             {/* Question Body Text */}
             <div
-              className="my-auto py-3 px-1 flex items-center justify-center"
+              className="my-auto py-2 px-1 flex items-center justify-center"
               data-testid="question-box"
             >
               {!hasSelection ? (
-                <p className="text-lg xl:text-xl font-extrabold text-white/90 leading-relaxed">
+                <p className="text-base xl:text-lg font-extrabold text-white/90 leading-relaxed">
                   اختر خلية لإظهار السؤال...
                 </p>
               ) : state.questionExhaustedForLetter ? (
                 <div className="space-y-1">
-                  <p className="text-base font-extrabold text-amber-300">
+                  <p className="text-sm font-extrabold text-amber-300">
                     انتهت جميع الأسئلة المتاحة لحرف ({selectedCell.letter}) في هذه المباراة!
                   </p>
                   <p className="text-xs text-white/75">
@@ -355,28 +382,146 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
                   </p>
                 </div>
               ) : (
-                <p className="text-lg xl:text-[21px] font-extrabold text-white leading-relaxed">
+                <p className="text-base xl:text-[19px] font-extrabold text-white leading-relaxed">
                   {state.currentQuestion?.question}
                 </p>
               )}
             </div>
 
-            {/* Timer visual progress bar when timer is enabled */}
-            {state.settings.timerSeconds > 0 && hasSelection && (
-              <div className="w-full h-1.5 bg-black/30 rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-300 ${
-                    state.timerRemaining <= 5 ? 'bg-rose-500' : 'bg-amber-400'
-                  }`}
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      Math.round(
-                        (state.timerRemaining / state.settings.timerSeconds) * 100
-                      )
-                    )}%`,
-                  }}
-                />
+            {/* Buzzer Control & Automatic Winner Result Section */}
+            {hasSelection && (
+              <div className="w-full space-y-2 pt-1 border-t border-white/10">
+                {/* 1. When a team has buzzed in first! */}
+                {buzzer.status === 'locked_by_winner' && buzzerWinnerTeam ? (
+                  <div
+                    data-testid="buzzer-winner-banner"
+                    style={{
+                      backgroundColor: buzzerWinnerTeam.color,
+                    }}
+                    className="w-full rounded-xl p-2.5 text-slate-950 shadow-lg space-y-2"
+                  >
+                    <div className="flex items-center justify-between px-1">
+                      <span
+                        className="text-sm xl:text-base font-black"
+                        data-testid="buzzer-winner-text"
+                      >
+                        {buzzerWinnerTeam.name} ضغط أولًا!
+                      </span>
+                      <span
+                        className="px-2 py-0.5 rounded-lg bg-slate-950 text-amber-300 font-mono font-black text-xs tabular-nums"
+                        data-testid="buzzer-answer-timer"
+                      >
+                        عداد الإجابة: {buzzer.answerTimerRemaining}ث
+                      </span>
+                    </div>
+
+                    {!isDisplayOnly && (
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={onBuzzerCorrectAnswer}
+                          data-testid="btn-buzz-correct"
+                          className="py-1.5 px-2 rounded-lg bg-slate-950 hover:bg-slate-900 text-emerald-400 font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow"
+                        >
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                          <span>إجابة صحيحة</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={onBuzzerWrongAnswer}
+                          data-testid="btn-buzz-wrong"
+                          className="py-1.5 px-2 rounded-lg bg-slate-950 hover:bg-slate-900 text-rose-400 font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow"
+                        >
+                          <XCircle className="w-3.5 h-3.5" />
+                          <span>إجابة خاطئة</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={onBuzzerResetRace}
+                          data-testid="btn-buzz-reset"
+                          className="py-1.5 px-2 rounded-lg bg-slate-950/80 hover:bg-slate-900 text-amber-300 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>إعادة السباق</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  /* 2. When waiting to open buzzer or buzzer is currently open for racing */
+                  !isDisplayOnly && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px] font-bold px-1">
+                        <span
+                          data-testid="buzzer-state-label"
+                          className={
+                            buzzer.status === 'open'
+                              ? 'text-emerald-300 font-black'
+                              : buzzer.status === 'exhausted'
+                              ? 'text-rose-300 font-black'
+                              : 'text-amber-300'
+                          }
+                        >
+                          {buzzer.status === 'open'
+                            ? buzzer.lockedOutTeams.length === 1
+                              ? `الجرس مفتوح لـ ${
+                                  buzzer.lockedOutTeams[0] === 'team1'
+                                    ? state.team2.name
+                                    : state.team1.name
+                                } فقط!`
+                              : 'الجرس مفتوح الآن — بانتظار ضغطة الفريقين!'
+                            : buzzer.status === 'exhausted'
+                            ? 'أخطأ الفريقان في هذا السؤال'
+                            : 'الجرس مقفول (استعداد)'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={onBuzzerOpen}
+                          disabled={buzzer.status === 'open'}
+                          data-testid="btn-open-buzzer"
+                          className={`py-1.5 px-2 rounded-xl font-black text-xs flex items-center justify-center gap-1 transition ${
+                            buzzer.status !== 'open'
+                              ? 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 cursor-pointer shadow'
+                              : 'bg-emerald-500/25 text-emerald-200/50 cursor-not-allowed'
+                          }`}
+                        >
+                          <Bell className="w-3.5 h-3.5" />
+                          <span>فتح الجرس</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={onBuzzerLock}
+                          disabled={buzzer.status !== 'open'}
+                          data-testid="btn-lock-buzzer"
+                          className={`py-1.5 px-2 rounded-xl font-black text-xs flex items-center justify-center gap-1 transition ${
+                            buzzer.status === 'open'
+                              ? 'bg-rose-500 hover:bg-rose-400 text-white cursor-pointer shadow'
+                              : 'bg-white/10 text-white/40 cursor-not-allowed'
+                          }`}
+                        >
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>قفل الجرس</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={onBuzzerResetRace}
+                          data-testid="btn-buzz-reset"
+                          className="py-1.5 px-2 rounded-xl bg-white/10 hover:bg-white/20 text-amber-300 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>إعادة السباق</span>
+                        </button>
+                      </div>
+                    </div>
+                  )
+                )}
               </div>
             )}
           </div>
@@ -386,44 +531,42 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
         {hasSelection && state.answerRevealed && state.currentQuestion && (
           <div
             data-testid="revealed-answer-banner"
-            className="mt-3 w-full rounded-xl bg-[#273B40] border-2 border-[#28B81E] px-4 py-2 flex items-center justify-between shadow-md"
+            className="mt-2.5 w-full rounded-xl bg-[#273B40] border-2 border-[#28B81E] px-3.5 py-1.5 flex items-center justify-between shadow-md"
           >
-            <Check className="w-5 h-5 text-[#28B81E] stroke-[3] shrink-0" />
-            <span className="text-base xl:text-lg font-extrabold text-[#4ADE80] text-center flex-1">
+            <Check className="w-4 h-4 text-[#28B81E] stroke-[3] shrink-0" />
+            <span className="text-sm xl:text-base font-extrabold text-[#4ADE80] text-center flex-1">
               {state.currentQuestion.answer}
             </span>
-            <span className="w-5" aria-hidden="true" />
+            <span className="w-4" aria-hidden="true" />
           </div>
         )}
 
         {/* Question Control Buttons (Hidden in Audience Display Mode) */}
         {!isDisplayOnly && (
-          <div className="mt-3 grid grid-cols-2 gap-3 shrink-0">
-            {/* Show / Hide Answer Button (Cyan) */}
+          <div className="mt-2.5 grid grid-cols-2 gap-2.5 shrink-0">
             <button
               type="button"
               disabled={!hasSelection || !state.currentQuestion}
               onClick={onRevealOrHideAnswer}
               data-testid="btn-toggle-answer"
-              className={`py-2.5 px-3 rounded-2xl font-black text-sm xl:text-base transition whitespace-nowrap ${
+              className={`py-2 px-3 rounded-2xl font-black text-sm transition whitespace-nowrap ${
                 hasSelection && state.currentQuestion
-                  ? 'bg-[#22C3D1] hover:bg-[#2fd1df] text-[#132A34] shadow-[0_5px_0_#138896] active:translate-y-0.5 active:shadow-[0_2px_0_#138896] cursor-pointer'
-                  : 'bg-[#22C3D1]/40 text-[#132A34]/60 shadow-[0_4px_0_#0f5a63] cursor-not-allowed'
+                  ? 'bg-[#22C3D1] hover:bg-[#2fd1df] text-[#132A34] shadow-[0_4px_0_#138896] active:translate-y-0.5 cursor-pointer'
+                  : 'bg-[#22C3D1]/40 text-[#132A34]/60 shadow-[0_3px_0_#0f5a63] cursor-not-allowed'
               }`}
             >
               {state.answerRevealed ? 'إخفاء الإجابة' : 'عرض الإجابة'}
             </button>
 
-            {/* New Question Button (Yellow) */}
             <button
               type="button"
               disabled={!hasSelection}
               onClick={onNewQuestion}
               data-testid="btn-new-question"
-              className={`py-2.5 px-3 rounded-2xl font-black text-sm xl:text-base transition whitespace-nowrap ${
+              className={`py-2 px-3 rounded-2xl font-black text-sm transition whitespace-nowrap ${
                 hasSelection
-                  ? 'bg-[#EDC700] hover:bg-[#f7d316] text-[#2A1D00] shadow-[0_5px_0_#B28F00] active:translate-y-0.5 active:shadow-[0_2px_0_#B28F00] cursor-pointer'
-                  : 'bg-[#EDC700]/40 text-[#2A1D00]/60 shadow-[0_4px_0_#755e00] cursor-not-allowed'
+                  ? 'bg-[#EDC700] hover:bg-[#f7d316] text-[#2A1D00] shadow-[0_4px_0_#B28F00] active:translate-y-0.5 cursor-pointer'
+                  : 'bg-[#EDC700]/40 text-[#2A1D00]/60 shadow-[0_3px_0_#755e00] cursor-not-allowed'
               }`}
             >
               سؤال جديد
@@ -433,7 +576,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
       </div>
 
       {/* Bottom Team Score & Cell Claim Bars */}
-      <div className="flex flex-col gap-2.5 shrink-0">
+      <div className="flex flex-col gap-2 shrink-0">
         {/* Team 1 Pill Bar (Green — Vertical Path) */}
         <button
           type="button"
@@ -445,16 +588,15 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
             backgroundColor: hasSelection && !isDisplayOnly ? state.team1.color : '#38344C',
             borderColor: state.team1.color,
           }}
-          className={`w-full rounded-full border-[3px] px-3.5 py-2 flex items-center justify-between transition shadow-lg ${
+          className={`w-full rounded-full border-[3px] px-3 py-1.5 flex items-center justify-between transition shadow-lg ${
             hasSelection && !isDisplayOnly
               ? 'cursor-pointer hover:brightness-105 active:scale-[0.99]'
               : 'cursor-default'
           }`}
         >
-          {/* Right side in RTL: Hexagonal Cell Counter */}
           <div className="flex items-center gap-2">
-            <div className="relative w-11 h-11 flex items-center justify-center shrink-0">
-              <svg width="44" height="44" viewBox="0 0 48 48" aria-hidden="true">
+            <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
+              <svg width="40" height="40" viewBox="0 0 48 48" aria-hidden="true">
                 <path
                   d={getRoundedHexPath(24, 24, 20, 4)}
                   fill={state.team1.color}
@@ -463,7 +605,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
                 />
               </svg>
               <span
-                className="absolute inset-0 flex items-center justify-center font-black text-lg text-[#102A13] tabular-nums"
+                className="absolute inset-0 flex items-center justify-center font-black text-base text-[#102A13] tabular-nums"
                 data-testid="team1-cell-count"
               >
                 {team1OwnedCount}
@@ -471,14 +613,14 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
             </div>
             <div className="text-right">
               <div
-                className={`text-lg xl:text-xl font-black leading-tight ${
+                className={`text-base xl:text-lg font-black leading-tight ${
                   hasSelection && !isDisplayOnly ? 'text-[#0E2911]' : 'text-[#28B81E]'
                 }`}
               >
                 {state.team1.name}
               </div>
               <div
-                className={`text-[11px] font-bold ${
+                className={`text-[10px] font-bold ${
                   hasSelection && !isDisplayOnly ? 'text-[#0E2911]/80' : 'text-white/65'
                 }`}
               >
@@ -487,10 +629,9 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
             </div>
           </div>
 
-          {/* Left side in RTL: Checkmark icon when ready to claim */}
           <div className="pl-2">
             <Check
-              className={`w-7 h-7 stroke-[3] transition-opacity ${
+              className={`w-6 h-6 stroke-[3] transition-opacity ${
                 hasSelection && !isDisplayOnly
                   ? 'opacity-100 text-[#0E2911]'
                   : 'opacity-25 text-white'
@@ -510,16 +651,15 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
             backgroundColor: hasSelection && !isDisplayOnly ? state.team2.color : '#59324C',
             borderColor: state.team2.color,
           }}
-          className={`w-full rounded-full border-[3px] px-3.5 py-2 flex items-center justify-between transition shadow-lg ${
+          className={`w-full rounded-full border-[3px] px-3 py-1.5 flex items-center justify-between transition shadow-lg ${
             hasSelection && !isDisplayOnly
               ? 'cursor-pointer hover:brightness-105 active:scale-[0.99]'
               : 'cursor-default'
           }`}
         >
-          {/* Right side in RTL: Hexagonal Cell Counter */}
           <div className="flex items-center gap-2">
-            <div className="relative w-11 h-11 flex items-center justify-center shrink-0">
-              <svg width="44" height="44" viewBox="0 0 48 48" aria-hidden="true">
+            <div className="relative w-10 h-10 flex items-center justify-center shrink-0">
+              <svg width="40" height="40" viewBox="0 0 48 48" aria-hidden="true">
                 <path
                   d={getRoundedHexPath(24, 24, 20, 4)}
                   fill={state.team2.color}
@@ -528,7 +668,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
                 />
               </svg>
               <span
-                className="absolute inset-0 flex items-center justify-center font-black text-lg text-[#2E1305] tabular-nums"
+                className="absolute inset-0 flex items-center justify-center font-black text-base text-[#2E1305] tabular-nums"
                 data-testid="team2-cell-count"
               >
                 {team2OwnedCount}
@@ -536,14 +676,14 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
             </div>
             <div className="text-right">
               <div
-                className={`text-lg xl:text-xl font-black leading-tight ${
+                className={`text-base xl:text-lg font-black leading-tight ${
                   hasSelection && !isDisplayOnly ? 'text-[#2E1305]' : 'text-[#FF7724]'
                 }`}
               >
                 {state.team2.name}
               </div>
               <div
-                className={`text-[11px] font-bold ${
+                className={`text-[10px] font-bold ${
                   hasSelection && !isDisplayOnly ? 'text-[#2E1305]/80' : 'text-white/65'
                 }`}
               >
@@ -552,10 +692,9 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
             </div>
           </div>
 
-          {/* Left side in RTL: Checkmark icon when ready to claim */}
           <div className="pl-2">
             <Check
-              className={`w-7 h-7 stroke-[3] transition-opacity ${
+              className={`w-6 h-6 stroke-[3] transition-opacity ${
                 hasSelection && !isDisplayOnly
                   ? 'opacity-100 text-[#2E1305]'
                   : 'opacity-25 text-white'
