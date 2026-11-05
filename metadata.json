@@ -1,0 +1,6 @@
+{
+  "name": "حروف النخبة — ELITE CLASH",
+  "description": "لعبة مسابقات حروف تلفزيونية احترافية بين فريقين ضمن دوري ELITE CLASH مع تحكم مباشر من الجوال ومزامنة فورية وبنك 300+ سؤال عربي.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
