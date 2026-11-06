@@ -220,4 +220,22 @@ test('Atomic Buzzer System: premature press, opening, first press wins, simultan
   assert.equal(state.buzzer.status, 'idle');
   assert.equal(state.buzzer.winner, null);
   assert.equal(state.buzzer.lockedOutTeams.length, 0);
+
+  // 11. Question show/hide from controller works and respects autoShowQuestionOnSelect
+  state = applyGameAction(state, { type: 'SELECT_CELL', payload: { cellId: 3 } });
+  assert.equal(state.questionRevealed, true);
+
+  state = applyGameAction(state, { type: 'HIDE_QUESTION' });
+  assert.equal(state.questionRevealed, false);
+
+  state = applyGameAction(state, { type: 'SHOW_QUESTION' });
+  assert.equal(state.questionRevealed, true);
+
+  state = applyGameAction(state, {
+    type: 'UPDATE_SETTINGS',
+    payload: { autoShowQuestionOnSelect: false },
+  });
+  state = applyGameAction(state, { type: 'SELECT_CELL', payload: { cellId: 4 } });
+  assert.equal(state.questionRevealed, false);
 });
+

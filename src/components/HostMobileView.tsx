@@ -172,7 +172,7 @@ export const HostMobileView: React.FC<HostMobileViewProps> = ({
 
       {/* Secret Host Question, Buzzer Controls & Answer Card */}
       <section className="rounded-3xl bg-[#230E3B] border-2 border-purple-400/30 p-4 space-y-3 shadow-xl">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="w-10 h-10 rounded-xl bg-amber-400 text-slate-950 font-black text-xl flex items-center justify-center shadow">
               {selectedCell ? selectedCell.letter : '!'}
@@ -183,34 +183,106 @@ export const HostMobileView: React.FC<HostMobileViewProps> = ({
                   ? state.currentQuestion.category
                   : 'اختر حرفًا من الشبكة بالأسفل'}
               </div>
-              <div className="text-xs font-extrabold text-amber-300">
-                {state.answerRevealed
-                  ? 'الإجابة ظاهرة للجمهور الآن'
-                  : 'الإجابة مخفية عن الجمهور (تظهر لك فقط)'}
+              <div className="text-[11px] font-extrabold text-amber-300">
+                {state.questionRevealed
+                  ? 'السؤال ظاهر للجمهور على التلفزيون'
+                  : 'السؤال مخفي عن التلفزيون (يظهر لك فقط)'}
               </div>
             </div>
           </div>
 
-          {hasSelection && (
+          <div className="flex items-center gap-1.5">
+            {/* Auto-Show Question on Select Setting Toggle */}
             <button
               type="button"
-              onClick={() => onDispatch({ type: 'DESELECT_CELL' })}
-              className="p-2 rounded-xl bg-white/10 hover:bg-rose-500/80 text-white cursor-pointer"
-              aria-label="إلغاء اختيار الحرف"
+              onClick={() =>
+                onDispatch({
+                  type: 'UPDATE_SETTINGS',
+                  payload: {
+                    autoShowQuestionOnSelect:
+                      !state.settings.autoShowQuestionOnSelect,
+                  },
+                })
+              }
+              data-testid="host-btn-auto-question-mode"
+              className={`px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold border cursor-pointer transition ${
+                state.settings.autoShowQuestionOnSelect
+                  ? 'bg-purple-500/25 border-purple-400/50 text-purple-200'
+                  : 'bg-amber-400/20 border-amber-400/60 text-amber-300'
+              }`}
             >
-              <X className="w-4 h-4" />
+              {state.settings.autoShowQuestionOnSelect
+                ? 'عرض السؤال: تلقائي'
+                : 'عرض السؤال: يدوي'}
             </button>
-          )}
+
+            {hasSelection && (
+              <button
+                type="button"
+                onClick={() => onDispatch({ type: 'DESELECT_CELL' })}
+                className="p-2 rounded-xl bg-white/10 hover:bg-rose-500/80 text-white cursor-pointer"
+                aria-label="إلغاء اختيار الحرف"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Question text */}
-        <div className="rounded-2xl bg-[#160826] border border-white/10 p-3.5 text-center">
-          <p className="text-base font-extrabold leading-relaxed text-white">
+        {/* Question text + Show/Hide Question on TV Button */}
+        <div className="rounded-2xl bg-[#160826] border border-white/10 p-3.5 space-y-2.5">
+          <p
+            className="text-base font-extrabold leading-relaxed text-white text-center"
+            data-testid="host-question-text"
+          >
             {hasSelection
               ? state.currentQuestion?.question ||
                 'انتهت أسئلة هذا الحرف في المباراة الحالية.'
               : 'اضغط على أي خلية بيضاء في الشبكة لعرض سؤالها...'}
           </p>
+
+          {hasSelection && state.currentQuestion && (
+            <div className="flex items-center justify-between pt-2 border-t border-white/10">
+              <span
+                className={`text-[11px] font-bold ${
+                  state.questionRevealed ? 'text-cyan-300' : 'text-amber-300'
+                }`}
+              >
+                {state.questionRevealed
+                  ? 'السؤال معروض الآن على شاشة التلفزيون'
+                  : 'السؤال مخفي حاليًا عن شاشة التلفزيون'}
+              </span>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onDispatch({
+                    type: state.questionRevealed
+                      ? 'HIDE_QUESTION'
+                      : 'SHOW_QUESTION',
+                  })
+                }
+                data-testid="host-btn-toggle-question"
+                className={`px-3.5 py-1.5 rounded-xl font-black text-xs flex items-center gap-1.5 cursor-pointer transition ${
+                  state.questionRevealed
+                    ? 'bg-amber-400 text-slate-950'
+                    : 'bg-purple-500 text-white'
+                }`}
+              >
+                {state.questionRevealed ? (
+                  <>
+                    <EyeOff className="w-4 h-4" />
+                    <span>إخفاء السؤال عن التلفزيون</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-4 h-4" />
+                    <span>إظهار السؤال على التلفزيون</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Host-Only Always-Visible Secret Answer Box */}

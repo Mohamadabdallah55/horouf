@@ -2,6 +2,8 @@ import React from 'react';
 import {
   Bell,
   Check,
+  Eye,
+  EyeOff,
   Lock,
   Maximize2,
   Menu,
@@ -25,6 +27,7 @@ interface SideControlPanelProps {
   isDisplayOnly: boolean;
   isMuted: boolean;
   correctionMode: boolean;
+  onToggleQuestionVisibility: () => void;
   onRevealOrHideAnswer: () => void;
   onNewQuestion: () => void;
   onDeselectCell: () => void;
@@ -50,6 +53,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
   isDisplayOnly,
   isMuted,
   correctionMode,
+  onToggleQuestionVisibility,
   onRevealOrHideAnswer,
   onNewQuestion,
   onDeselectCell,
@@ -406,6 +410,19 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
                     يمكنك طرح سؤال خارجي مباشر أو منح الخلية للفريق الفائز.
                   </p>
                 </div>
+              ) : !state.questionRevealed ? (
+                <div
+                  className="flex flex-col items-center gap-1.5 py-2 px-3 rounded-2xl bg-[#230E3B]/70 border border-amber-400/35"
+                  data-testid="question-hidden-banner"
+                >
+                  <EyeOff className="w-5 h-5 text-amber-300" />
+                  <p className="text-sm xl:text-base font-extrabold text-amber-300">
+                    السؤال مخفي حاليًا عن الشاشة
+                  </p>
+                  <p className="text-[11px] text-white/70 font-bold">
+                    يظهر السؤال لدى المقدم في جهاز التحكم ويمكن إظهاره في أي لحظة
+                  </p>
+                </div>
               ) : (
                 <p className="text-base xl:text-[19px] font-extrabold text-white leading-relaxed">
                   {state.currentQuestion?.question}
@@ -568,13 +585,39 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
 
         {/* Question Control Buttons (Hidden in Audience Display Mode) */}
         {!isDisplayOnly && (
-          <div className="mt-2.5 grid grid-cols-2 gap-2.5 shrink-0">
+          <div className="mt-2.5 grid grid-cols-3 gap-2 shrink-0">
+            <button
+              type="button"
+              disabled={!hasSelection || !state.currentQuestion}
+              onClick={onToggleQuestionVisibility}
+              data-testid="btn-toggle-question"
+              className={`py-2 px-2 rounded-2xl font-black text-xs xl:text-sm flex items-center justify-center gap-1 transition whitespace-nowrap ${
+                hasSelection && state.currentQuestion
+                  ? state.questionRevealed
+                    ? 'bg-purple-500 hover:bg-purple-400 text-white shadow-[0_4px_0_#581c87] active:translate-y-0.5 cursor-pointer'
+                    : 'bg-amber-400 hover:bg-amber-300 text-slate-950 shadow-[0_4px_0_#b45309] active:translate-y-0.5 cursor-pointer'
+                  : 'bg-purple-500/30 text-white/45 shadow-[0_3px_0_#3b0764] cursor-not-allowed'
+              }`}
+            >
+              {state.questionRevealed ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5 shrink-0" />
+                  <span>إخفاء السؤال</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3.5 h-3.5 shrink-0" />
+                  <span>إظهار السؤال</span>
+                </>
+              )}
+            </button>
+
             <button
               type="button"
               disabled={!hasSelection || !state.currentQuestion}
               onClick={onRevealOrHideAnswer}
               data-testid="btn-toggle-answer"
-              className={`py-2 px-3 rounded-2xl font-black text-sm transition whitespace-nowrap ${
+              className={`py-2 px-2 rounded-2xl font-black text-xs xl:text-sm transition whitespace-nowrap ${
                 hasSelection && state.currentQuestion
                   ? 'bg-[#22C3D1] hover:bg-[#2fd1df] text-[#132A34] shadow-[0_4px_0_#138896] active:translate-y-0.5 cursor-pointer'
                   : 'bg-[#22C3D1]/40 text-[#132A34]/60 shadow-[0_3px_0_#0f5a63] cursor-not-allowed'
@@ -588,7 +631,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
               disabled={!hasSelection}
               onClick={onNewQuestion}
               data-testid="btn-new-question"
-              className={`py-2 px-3 rounded-2xl font-black text-sm transition whitespace-nowrap ${
+              className={`py-2 px-2 rounded-2xl font-black text-xs xl:text-sm transition whitespace-nowrap ${
                 hasSelection
                   ? 'bg-[#EDC700] hover:bg-[#f7d316] text-[#2A1D00] shadow-[0_4px_0_#B28F00] active:translate-y-0.5 cursor-pointer'
                   : 'bg-[#EDC700]/40 text-[#2A1D00]/60 shadow-[0_3px_0_#755e00] cursor-not-allowed'

@@ -560,6 +560,11 @@ export default function App() {
           isDisplayOnly={isDisplayOnly}
           isMuted={isMuted}
           correctionMode={correctionMode}
+          onToggleQuestionVisibility={() =>
+            dispatchAction({
+              type: gameState.questionRevealed ? 'HIDE_QUESTION' : 'SHOW_QUESTION',
+            })
+          }
           onRevealOrHideAnswer={() =>
             dispatchAction({
               type: gameState.answerRevealed ? 'HIDE_ANSWER' : 'REVEAL_ANSWER',

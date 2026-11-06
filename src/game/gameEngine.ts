@@ -86,6 +86,7 @@ export function createInitialRoomState(
     selectedCellId: null,
     currentQuestion: null,
     questionExhaustedForLetter: false,
+    questionRevealed: true,
     answerRevealed: false,
     usedQuestionIds: [],
     moveHistory: [],
@@ -113,6 +114,7 @@ export function createInitialRoomState(
       timerSeconds: 30,
       answerTimerSeconds: 10,
       autoOpenBuzzerOnQuestion: false,
+      autoShowQuestionOnSelect: true,
       theme: 'classic',
       fontFamily: 'Cairo',
       selectedCategories: [...ALL_CATEGORIES],
@@ -171,6 +173,9 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       if (typeof p.autoOpenBuzzerOnQuestion === 'boolean') {
         next.settings.autoOpenBuzzerOnQuestion = p.autoOpenBuzzerOnQuestion;
       }
+      if (typeof p.autoShowQuestionOnSelect === 'boolean') {
+        next.settings.autoShowQuestionOnSelect = p.autoShowQuestionOnSelect;
+      }
       if (p.theme) next.settings.theme = p.theme;
       if (p.fontFamily) next.settings.fontFamily = p.fontFamily;
 
@@ -184,6 +189,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       next.selectedCellId = null;
       next.currentQuestion = null;
       next.questionExhaustedForLetter = false;
+      next.questionRevealed = next.settings.autoShowQuestionOnSelect;
       next.answerRevealed = false;
       next.winningTeam = null;
       next.winningPath = [];
@@ -217,6 +223,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       }
 
       next.selectedCellId = cellId;
+      next.questionRevealed = next.settings.autoShowQuestionOnSelect;
       next.answerRevealed = false;
 
       const { question, exhausted } = pickQuestionForLetter(
@@ -248,6 +255,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       next.selectedCellId = null;
       next.currentQuestion = null;
       next.questionExhaustedForLetter = false;
+      next.questionRevealed = next.settings.autoShowQuestionOnSelect;
       next.answerRevealed = false;
       next.timerRunning = false;
       next.timerRemaining = next.settings.timerSeconds;
@@ -256,6 +264,18 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
         state.buzzer.questionNonce + 1,
         next.settings.answerTimerSeconds
       );
+      return next;
+    }
+
+    case 'SHOW_QUESTION': {
+      if (next.selectedCellId === null) return state;
+      next.questionRevealed = true;
+      return next;
+    }
+
+    case 'HIDE_QUESTION': {
+      if (next.selectedCellId === null) return state;
+      next.questionRevealed = false;
       return next;
     }
 
@@ -277,6 +297,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       const cell = next.cells[next.selectedCellId];
       if (!cell) return state;
 
+      next.questionRevealed = next.settings.autoShowQuestionOnSelect;
       next.answerRevealed = false;
       const { question, exhausted } = pickQuestionForLetter(
         cell.letter,

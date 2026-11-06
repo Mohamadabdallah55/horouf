@@ -56,6 +56,7 @@ export interface GameSettings {
   timerSeconds: number; // 0 = disabled, or 15, 30, 45, 60
   answerTimerSeconds: number; // Countdown after buzzing in, default 10s
   autoOpenBuzzerOnQuestion: boolean; // Automatically open buzzer when question appears
+  autoShowQuestionOnSelect: boolean; // Automatically show question on TV when selecting a cell
   theme: VisualThemeId;
   fontFamily: FontFamilyId;
   selectedCategories: QuestionCategory[];
@@ -118,6 +119,7 @@ export interface RoomGameState {
   selectedCellId: number | null;
   currentQuestion: QuestionItem | null;
   questionExhaustedForLetter: boolean;
+  questionRevealed: boolean;
   answerRevealed: boolean;
   usedQuestionIds: string[];
   moveHistory: MoveRecord[];
@@ -146,6 +148,7 @@ export type GameAction =
         timerSeconds: number;
         answerTimerSeconds: number;
         autoOpenBuzzerOnQuestion: boolean;
+        autoShowQuestionOnSelect: boolean;
         theme: VisualThemeId;
         fontFamily: FontFamilyId;
       }>;
@@ -153,6 +156,8 @@ export type GameAction =
   | { type: 'FINISH_ROUND_INTRO' }
   | { type: 'SELECT_CELL'; payload: { cellId: number } }
   | { type: 'DESELECT_CELL' }
+  | { type: 'SHOW_QUESTION' }
+  | { type: 'HIDE_QUESTION' }
   | { type: 'REVEAL_ANSWER' }
   | { type: 'HIDE_ANSWER' }
   | { type: 'NEW_QUESTION' }
