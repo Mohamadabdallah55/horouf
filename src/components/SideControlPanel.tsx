@@ -41,6 +41,7 @@ interface SideControlPanelProps {
   onBuzzerCorrectAnswer: () => void;
   onBuzzerWrongAnswer: () => void;
   onBuzzerResetRace: () => void;
+  onToggleDisplayMode: () => void;
 }
 
 export const SideControlPanel: React.FC<SideControlPanelProps> = ({
@@ -65,6 +66,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
   onBuzzerCorrectAnswer,
   onBuzzerWrongAnswer,
   onBuzzerResetRace,
+  onToggleDisplayMode,
 }) => {
   const selectedCell =
     state.selectedCellId !== null ? state.cells[state.selectedCellId] : null;
@@ -153,6 +155,17 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
 
           {/* Right Action Cluster */}
           <div className="flex items-center gap-1.5">
+            {isDisplayOnly && (
+              <button
+                type="button"
+                onClick={onToggleDisplayMode}
+                title="العودة لوضع الاستوديو"
+                className="px-2.5 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-extrabold transition cursor-pointer"
+              >
+                وضع الاستوديو
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleFullscreen}
@@ -176,18 +189,18 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
           </div>
         </div>
 
-        {/* Host Quick Utility Strip + Activate Buzzer Button */}
+        {/* Host Quick Utility Strip + Activate Buzzer & Host Controller Button */}
         {!isDisplayOnly && (
           <div className="grid grid-cols-4 gap-1.5">
             <button
               type="button"
               onClick={onOpenSyncModal}
               data-testid="btn-activate-buzzer"
-              aria-label="تفعيل الجرس وربط الأجهزة"
+              aria-label="تفعيل الجرس وجهاز التحكم"
               className="col-span-2 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-xl text-xs font-black bg-amber-400 hover:bg-amber-300 text-slate-950 shadow transition cursor-pointer"
             >
               <Bell className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate">تفعيل الجرس ({state.roomCode})</span>
+              <span className="truncate">الجرس والتحكم ({state.roomCode})</span>
             </button>
 
             <button
@@ -236,13 +249,13 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
           </div>
         )}
 
-        {/* Live Team Buzzer Connection Status Strip */}
+        {/* Live Team Buzzer & Host Connection Status Strip */}
         <div
-          className="rounded-xl bg-[#230E3B]/85 border border-white/10 px-3 py-1.5 flex items-center justify-between text-[11px] font-bold"
+          className="rounded-xl bg-[#230E3B]/85 border border-white/10 px-2.5 py-1.5 flex items-center justify-between text-[11px] font-bold"
           data-testid="buzzer-connection-strip"
         >
-          <div className="flex items-center gap-1.5">
-            <span className="text-white/70">جرس {state.team1.name}:</span>
+          <div className="flex items-center gap-1">
+            <span className="text-white/70">جرس 1:</span>
             <span
               data-testid="status-team1-conn"
               className={
@@ -253,8 +266,8 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
             </span>
           </div>
           <span className="text-white/25">·</span>
-          <div className="flex items-center gap-1.5">
-            <span className="text-white/70">جرس {state.team2.name}:</span>
+          <div className="flex items-center gap-1">
+            <span className="text-white/70">جرس 2:</span>
             <span
               data-testid="status-team2-conn"
               className={
@@ -262,6 +275,18 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
               }
             >
               {presence.team2Connected ? 'متصل' : 'غير متصل'}
+            </span>
+          </div>
+          <span className="text-white/25">·</span>
+          <div className="flex items-center gap-1">
+            <span className="text-white/70">المقدم:</span>
+            <span
+              data-testid="status-host-conn"
+              className={
+                presence.hosts > 0 ? 'text-amber-300 font-black' : 'text-white/45'
+              }
+            >
+              {presence.hosts > 0 ? `متصل (${presence.hosts})` : 'غير متصل'}
             </span>
           </div>
         </div>

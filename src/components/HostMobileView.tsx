@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import {
+  Bell,
   Check,
   Eye,
   EyeOff,
+  Lock,
   Play,
   Pause,
   RotateCcw,
@@ -11,13 +13,14 @@ import {
   Monitor,
   Trophy,
   X,
+  XCircle,
 } from 'lucide-react';
 import { getArabicRoundTitle } from '../game/gameEngine';
-import { CellOwner, GameAction, RoomGameState, TeamId } from '../types/game';
+import { CellOwner, GameAction, RoomGameState, RoomPresence, TeamId } from '../types/game';
 
 interface HostMobileViewProps {
   state: RoomGameState;
-  presence: { displays: number; hosts: number; studios: number; total: number };
+  presence: RoomPresence;
   onDispatch: (action: GameAction) => void;
   onSwitchToStudio: () => void;
 }
@@ -36,6 +39,14 @@ export const HostMobileView: React.FC<HostMobileViewProps> = ({
 
   const team1Count = state.cells.filter((c) => c.owner === 'team1').length;
   const team2Count = state.cells.filter((c) => c.owner === 'team2').length;
+
+  const buzzer = state.buzzer;
+  const buzzerWinnerTeam =
+    buzzer.winner === 'team1'
+      ? state.team1
+      : buzzer.winner === 'team2'
+      ? state.team2
+      : null;
 
   const handleCellTap = (cellId: number, currentOwner: CellOwner) => {
     if (correctionMode) {
@@ -60,28 +71,55 @@ export const HostMobileView: React.FC<HostMobileViewProps> = ({
   return (
     <div
       dir="rtl"
-      className="min-h-screen w-full bg-[#140824] text-white flex flex-col justify-between p-4 space-y-4 select-none overflow-y-auto"
+      className="min-h-screen w-full bg-[#140824] text-white flex flex-col justify-between p-4 space-y-3.5 select-none overflow-y-auto"
       data-testid="host-mobile-view"
     >
       {/* Top Status Header */}
-      <header className="flex items-center justify-between bg-[#230E3B] border border-white/15 rounded-2xl px-4 py-3 shadow-lg">
-        <div>
-          <div className="text-[11px] font-bold text-amber-300">
-            جهاز تحكم المقدم · غرفة {state.roomCode}
+      <header className="flex flex-col gap-2 bg-[#230E3B] border border-white/15 rounded-2xl px-4 py-3 shadow-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[11px] font-bold text-amber-300">
+              جهاز تحكم المقدم · غرفة {state.roomCode}
+            </div>
+            <h1 className="text-lg font-black">
+              {getArabicRoundTitle(state.currentRound)} ({presence.total} متصل)
+            </h1>
           </div>
-          <h1 className="text-lg font-black">
-            {getArabicRoundTitle(state.currentRound)} ({presence.total} متصل)
-          </h1>
+
+          <button
+            type="button"
+            onClick={onSwitchToStudio}
+            className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer"
+          >
+            <Monitor className="w-4 h-4 text-cyan-300" />
+            <span>شاشة الاستوديو</span>
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={onSwitchToStudio}
-          className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-extrabold flex items-center gap-1.5 cursor-pointer"
-        >
-          <Monitor className="w-4 h-4 text-cyan-300" />
-          <span>شاشة الاستوديو</span>
-        </button>
+        {/* Live Team Buzzer Connection Status */}
+        <div className="rounded-xl bg-[#160826] border border-white/10 px-3 py-1.5 flex items-center justify-between text-xs font-bold">
+          <div className="flex items-center gap-1.5">
+            <span className="text-white/70">جرس {state.team1.name}:</span>
+            <span
+              className={
+                presence.team1Connected ? 'text-emerald-400 font-black' : 'text-white/45'
+              }
+            >
+              {presence.team1Connected ? 'متصل' : 'غير متصل'}
+            </span>
+          </div>
+          <span className="text-white/25">·</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-white/70">جرس {state.team2.name}:</span>
+            <span
+              className={
+                presence.team2Connected ? 'text-orange-400 font-black' : 'text-white/45'
+              }
+            >
+              {presence.team2Connected ? 'متصل' : 'غير متصل'}
+            </span>
+          </div>
+        </div>
       </header>
 
       {/* If Game is on Title Screen, let Host start it from phone */}
@@ -132,7 +170,7 @@ export const HostMobileView: React.FC<HostMobileViewProps> = ({
         </div>
       )}
 
-      {/* Secret Host Question & Answer Card */}
+      {/* Secret Host Question, Buzzer Controls & Answer Card */}
       <section className="rounded-3xl bg-[#230E3B] border-2 border-purple-400/30 p-4 space-y-3 shadow-xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -218,6 +256,129 @@ export const HostMobileView: React.FC<HostMobileViewProps> = ({
           </div>
         )}
 
+        {/* Host Buzzer Race Control Panel */}
+        {hasSelection && (
+          <div className="rounded-2xl bg-[#160826] border border-white/15 p-3 space-y-2">
+            {buzzer.status === 'locked_by_winner' && buzzerWinnerTeam ? (
+              <div
+                data-testid="host-buzzer-winner-banner"
+                style={{ backgroundColor: buzzerWinnerTeam.color }}
+                className="rounded-xl p-3 text-slate-950 space-y-2 shadow-lg"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-black">
+                    🔔 {buzzerWinnerTeam.name} ضغط أولًا!
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-lg bg-slate-950 text-amber-300 font-mono font-black text-xs tabular-nums">
+                    عداد الإجابة: {buzzer.answerTimerRemaining}ث
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => onDispatch({ type: 'BUZZ_CORRECT_ANSWER' })}
+                    data-testid="host-btn-buzz-correct"
+                    className="py-2 px-2 rounded-xl bg-slate-950 text-emerald-400 font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow"
+                  >
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>إجابة صحيحة</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onDispatch({ type: 'BUZZ_WRONG_ANSWER' })}
+                    data-testid="host-btn-buzz-wrong"
+                    className="py-2 px-2 rounded-xl bg-slate-950 text-rose-400 font-black text-xs flex items-center justify-center gap-1 cursor-pointer shadow"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    <span>إجابة خاطئة</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onDispatch({ type: 'BUZZ_RESET_RACE' })}
+                    data-testid="host-btn-buzz-reset"
+                    className="py-2 px-2 rounded-xl bg-slate-950/85 text-amber-300 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>إعادة السباق</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-extrabold px-1">
+                  <span className="text-white/75">حالة الجرس الإلكتروني:</span>
+                  <span
+                    className={
+                      buzzer.status === 'open'
+                        ? 'text-emerald-400 font-black'
+                        : buzzer.status === 'exhausted'
+                        ? 'text-rose-400 font-black'
+                        : 'text-amber-300'
+                    }
+                  >
+                    {buzzer.status === 'open'
+                      ? buzzer.lockedOutTeams.length === 1
+                        ? `مفتوح لـ ${
+                            buzzer.lockedOutTeams[0] === 'team1'
+                              ? state.team2.name
+                              : state.team1.name
+                          } فقط`
+                        : 'مفتوح الآن للتسابق!'
+                      : buzzer.status === 'exhausted'
+                      ? 'أخطأ الفريقان'
+                      : 'مقفول (استعداد)'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    disabled={buzzer.status === 'open'}
+                    onClick={() => onDispatch({ type: 'BUZZ_OPEN' })}
+                    data-testid="host-btn-open-buzzer"
+                    className={`py-2 px-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1 ${
+                      buzzer.status !== 'open'
+                        ? 'bg-emerald-500 text-slate-950 cursor-pointer shadow'
+                        : 'bg-emerald-500/20 text-emerald-200/40 cursor-not-allowed'
+                    }`}
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    <span>فتح الجرس</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={buzzer.status !== 'open'}
+                    onClick={() => onDispatch({ type: 'BUZZ_LOCK' })}
+                    data-testid="host-btn-lock-buzzer"
+                    className={`py-2 px-2.5 rounded-xl font-black text-xs flex items-center justify-center gap-1 ${
+                      buzzer.status === 'open'
+                        ? 'bg-rose-500 text-white cursor-pointer shadow'
+                        : 'bg-white/10 text-white/40 cursor-not-allowed'
+                    }`}
+                  >
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>قفل الجرس</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onDispatch({ type: 'BUZZ_RESET_RACE' })}
+                    data-testid="host-btn-buzz-reset"
+                    className="py-2 px-2.5 rounded-xl bg-white/10 text-amber-300 font-bold text-xs flex items-center justify-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>إعادة السباق</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Question & Timer Controls */}
         <div className="grid grid-cols-3 gap-2">
           <button
@@ -282,7 +443,7 @@ export const HostMobileView: React.FC<HostMobileViewProps> = ({
             style={{
               backgroundColor: hasSelection ? state.team1.color : '#283c2b',
             }}
-            className={`py-3.5 px-4 rounded-2xl font-black text-sm flex items-center justify-between shadow-lg ${
+            className={`py-3 px-4 rounded-2xl font-black text-sm flex items-center justify-between shadow-lg ${
               hasSelection
                 ? 'text-slate-950 cursor-pointer active:scale-95'
                 : 'text-white/40 cursor-not-allowed'
@@ -301,7 +462,7 @@ export const HostMobileView: React.FC<HostMobileViewProps> = ({
             style={{
               backgroundColor: hasSelection ? state.team2.color : '#422c24',
             }}
-            className={`py-3.5 px-4 rounded-2xl font-black text-sm flex items-center justify-between shadow-lg ${
+            className={`py-3 px-4 rounded-2xl font-black text-sm flex items-center justify-between shadow-lg ${
               hasSelection
                 ? 'text-slate-950 cursor-pointer active:scale-95'
                 : 'text-white/40 cursor-not-allowed'

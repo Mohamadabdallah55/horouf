@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { HexBoard } from './components/HexBoard';
+import { HostMobileView } from './components/HostMobileView';
 import { RoomSyncModal } from './components/RoomSyncModal';
 import { SideControlPanel } from './components/SideControlPanel';
 import { StudioMenuDrawer } from './components/StudioMenuDrawer';
@@ -47,7 +48,12 @@ function getInitialUrlParams(): {
   const roomCode = (params.get('room') || 'ELITE1').trim().toUpperCase();
   const modeParam = params.get('mode') || params.get('role');
   let role: ClientRole = 'studio';
-  if (modeParam === 'team1' || modeParam === 'team2' || modeParam === 'display') {
+  if (
+    modeParam === 'team1' ||
+    modeParam === 'team2' ||
+    modeParam === 'display' ||
+    modeParam === 'host'
+  ) {
     role = modeParam;
   }
   const autostart = params.get('autostart') === '1';
@@ -75,6 +81,7 @@ export default function App() {
   const [presence, setPresence] = useState<RoomPresence>({
     displays: 0,
     studios: 1,
+    hosts: 0,
     team1Connected: false,
     team2Connected: false,
     team1DeviceId: null,
@@ -232,11 +239,11 @@ export default function App() {
   }, []);
 
   /**
-   * Dispatches a GameAction from the Main Screen (Studio)
+   * Dispatches a GameAction from the Main Screen (Studio) or Host Mobile Controller
    */
   const dispatchAction = useCallback(
     (action: GameAction) => {
-      if (role !== 'studio') return;
+      if (role !== 'studio' && role !== 'host') return;
 
       switch (action.type) {
         case 'SELECT_CELL':
@@ -264,7 +271,7 @@ export default function App() {
           break;
       }
 
-      // Apply optimistically on Main Screen
+      // Apply optimistically
       setGameState((prev) => applyGameAction(prev, action));
 
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -280,7 +287,7 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action,
-            role: 'studio',
+            role,
           }),
         })
           .then((r) => (r.ok ? r.json() : null))
@@ -442,6 +449,18 @@ export default function App() {
     );
   }
 
+  // Host Mobile Controller View (with Secret Answer Preview + Full Buzzer & Board Controls)
+  if (role === 'host') {
+    return (
+      <HostMobileView
+        state={gameState}
+        presence={presence}
+        onDispatch={dispatchAction}
+        onSwitchToStudio={() => handleSwitchRole('studio')}
+      />
+    );
+  }
+
   const isDisplayOnly = role === 'display';
   const buzzerWinner = gameState.buzzer.winner;
   const buzzerWinnerTeam =
@@ -569,6 +588,9 @@ export default function App() {
           }
           onBuzzerWrongAnswer={() => dispatchAction({ type: 'BUZZ_WRONG_ANSWER' })}
           onBuzzerResetRace={() => dispatchAction({ type: 'BUZZ_RESET_RACE' })}
+          onToggleDisplayMode={() =>
+            handleSwitchRole(role === 'display' ? 'studio' : 'display')
+          }
         />
       </section>
 

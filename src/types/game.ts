@@ -1,6 +1,6 @@
 export type TeamId = 'team1' | 'team2';
 export type CellOwner = 'none' | TeamId;
-export type ClientRole = 'studio' | 'display' | 'team1' | 'team2';
+export type ClientRole = 'studio' | 'display' | 'host' | 'team1' | 'team2';
 
 export type QuestionCategory =
   | 'معلومات عامة'
@@ -90,6 +90,7 @@ export interface BuzzerState {
 export interface RoomPresence {
   displays: number;
   studios: number;
+  hosts: number;
   team1Connected: boolean;
   team2Connected: boolean;
   team1DeviceId: string | null;

@@ -82,6 +82,7 @@ function sanitizeStateForRole(state: RoomGameState, role: ClientRole): RoomGameS
 function getRoomPresence(roomCode: string): RoomPresence {
   let displays = 0;
   let studios = 0;
+  let hosts = 0;
   let team1Connected = false;
   let team2Connected = false;
   const locks = getDeviceLocks(roomCode);
@@ -90,17 +91,23 @@ function getRoomPresence(roomCode: string): RoomPresence {
     if (c.roomCode === roomCode && c.ws.readyState === WebSocket.OPEN) {
       if (c.role === 'display') displays++;
       else if (c.role === 'studio') studios++;
+      else if (c.role === 'host') hosts++;
       else if (c.role === 'team1' && c.authorized) team1Connected = true;
       else if (c.role === 'team2' && c.authorized) team2Connected = true;
     }
   }
 
   const total =
-    displays + studios + (team1Connected ? 1 : 0) + (team2Connected ? 1 : 0);
+    displays +
+    studios +
+    hosts +
+    (team1Connected ? 1 : 0) +
+    (team2Connected ? 1 : 0);
 
   return {
     displays,
     studios,
+    hosts,
     team1Connected,
     team2Connected,
     team1DeviceId: locks.team1DeviceId,
@@ -146,7 +153,12 @@ setInterval(() => {
 }, 1000);
 
 function parseRole(rawRole: string | null | undefined): ClientRole {
-  if (rawRole === 'team1' || rawRole === 'team2' || rawRole === 'display') {
+  if (
+    rawRole === 'team1' ||
+    rawRole === 'team2' ||
+    rawRole === 'display' ||
+    rawRole === 'host'
+  ) {
     return rawRole;
   }
   return 'studio';
@@ -249,8 +261,11 @@ async function startServer() {
           return;
         }
 
-        // 2. Host Reset Team Device Lock
-        if (data.type === 'RESET_TEAM_DEVICE' && conn.role === 'studio') {
+        // 2. Host / Studio Reset Team Device Lock
+        if (
+          data.type === 'RESET_TEAM_DEVICE' &&
+          (conn.role === 'studio' || conn.role === 'host')
+        ) {
           const targetTeam: TeamId | 'both' = data.team || 'both';
           const locks = getDeviceLocks(conn.roomCode);
           if (targetTeam === 'team1' || targetTeam === 'both') {
@@ -259,7 +274,6 @@ async function startServer() {
           if (targetTeam === 'team2' || targetTeam === 'both') {
             locks.team2DeviceId = null;
           }
-          // Re-authorize any waiting socket for that team
           for (const c of clients) {
             if (c.roomCode === conn.roomCode && (c.role === 'team1' || c.role === 'team2')) {
               c.authorized = authorizeTeamDevice(c.roomCode, c.role, c.deviceId);
@@ -269,19 +283,29 @@ async function startServer() {
           return;
         }
 
-        // 3. Host / Main Screen Game Actions
+        // 3. Host Mobile Controller & Main Studio Game Actions
         if (data.type === 'ACTION' && data.action) {
-          if (conn.role !== 'studio') {
+          if (conn.role !== 'studio' && conn.role !== 'host') {
             ws.send(
               JSON.stringify({
                 type: 'ERROR',
-                message: 'التحكم بالمباراة متاح من الشاشة الرئيسية فقط.',
+                message: 'التحكم بالمباراة متاح من الشاشة الرئيسية أو جهاز المقدم فقط.',
               })
             );
             return;
           }
 
           const currentRoom = getOrCreateRoom(conn.roomCode);
+          if (data.pin && String(data.pin) !== currentRoom.hostPin) {
+            ws.send(
+              JSON.stringify({
+                type: 'ERROR',
+                message: 'رمز حماية المقدم (PIN) غير صحيح.',
+              })
+            );
+            return;
+          }
+
           const updated = applyGameAction(currentRoom, data.action as GameAction);
           rooms.set(conn.roomCode, updated);
           broadcastRoomState(conn.roomCode);
