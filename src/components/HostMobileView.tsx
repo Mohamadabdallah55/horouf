@@ -231,15 +231,59 @@ export const HostMobileView: React.FC<HostMobileViewProps> = ({
 
         {/* Question text + Show/Hide Question on TV Button */}
         <div className="rounded-2xl bg-[#160826] border border-white/10 p-3.5 space-y-2.5">
-          <p
-            className="text-base font-extrabold leading-relaxed text-white text-center"
-            data-testid="host-question-text"
-          >
-            {hasSelection
-              ? state.currentQuestion?.question ||
-                'انتهت أسئلة هذا الحرف في المباراة الحالية.'
-              : 'اضغط على أي خلية بيضاء في الشبكة لعرض سؤالها...'}
-          </p>
+          {state.currentQuestion && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] font-bold text-purple-200/80 pb-1 border-b border-white/10">
+              <span>
+                المستوى:{' '}
+                <strong className="text-amber-300">
+                  {state.currentQuestion.difficulty === 'expert'
+                    ? 'خبير'
+                    : state.currentQuestion.difficulty === 'hard'
+                    ? 'صعب'
+                    : state.currentQuestion.difficulty === 'medium'
+                    ? 'متوسط'
+                    : 'سهل'}
+                </strong>
+              </span>
+              {state.currentQuestion.source && (
+                <span className="text-white/60 truncate max-w-[220px]">
+                  المصدر: {state.currentQuestion.source}
+                </span>
+              )}
+            </div>
+          )}
+
+          {hasSelection && state.questionExhaustedForLetter ? (
+            <div className="space-y-2.5 text-center py-1">
+              <p
+                className="text-sm font-extrabold leading-relaxed text-amber-300"
+                data-testid="host-question-text"
+              >
+                {state.questionShortageMessage ||
+                  'انتهت أسئلة هذا الحرف في المستوى المحدد.'}
+              </p>
+              {(state.fallbackAvailableCount || 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onDispatch({ type: 'ALLOW_FALLBACK_QUESTION' })}
+                  data-testid="host-btn-allow-fallback"
+                  className="w-full py-2.5 px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow cursor-pointer transition"
+                >
+                  السماح بسؤال بديل لهذا الحرف ({state.fallbackAvailableCount} متاح)
+                </button>
+              )}
+            </div>
+          ) : (
+            <p
+              className="text-base font-extrabold leading-relaxed text-white text-center"
+              data-testid="host-question-text"
+            >
+              {hasSelection
+                ? state.currentQuestion?.question ||
+                  'انتهت أسئلة هذا الحرف في المباراة الحالية.'
+                : 'اضغط على أي خلية بيضاء في الشبكة لعرض سؤالها...'}
+            </p>
+          )}
 
           {hasSelection && state.currentQuestion && (
             <div className="flex items-center justify-between pt-2 border-t border-white/10">

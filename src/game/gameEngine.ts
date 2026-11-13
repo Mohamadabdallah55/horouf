@@ -1,4 +1,10 @@
-import { ALL_CATEGORIES, getQuestionsByLetter } from '../data/questions';
+import {
+  ALL_CATEGORIES,
+  getQuestionsByLetter,
+  incrementQuestionUsage,
+  QuestionFilterOptions,
+} from '../data/questions';
+import { ALL_SUBCATEGORY_IDS } from '../data/categoriesCatalog';
 import {
   BuzzerState,
   BuzzerStatus,
@@ -40,31 +46,92 @@ export function createBuzzerState(
   };
 }
 
+const DIFFICULTY_LABELS_AR: Record<string, string> = {
+  all: 'جميع المستويات',
+  easy: 'سهل',
+  medium: 'متوسط',
+  hard: 'صعب',
+  expert: 'خبير',
+};
+
 /**
  * Picks an unused question for the specified Arabic letter.
  * Never repeats a question within the same match (`usedQuestionIds`).
- * If all questions for that letter are exhausted, returns `null` so the UI displays a clear notice.
+ * STRICT RULE: Never silently falls back to easier questions or unselected categories unless `allowExplicitFallback` is true.
  */
 export function pickQuestionForLetter(
   letter: string,
   usedQuestionIds: string[],
-  selectedCategories = ALL_CATEGORIES
-): { question: QuestionItem | null; exhausted: boolean } {
+  selectedCategories = ALL_CATEGORIES,
+  filterOptions?: QuestionFilterOptions,
+  allowExplicitFallback: boolean = false
+): {
+  question: QuestionItem | null;
+  exhausted: boolean;
+  shortageMessage: string | null;
+  fallbackAvailableCount: number;
+} {
   const usedSet = new Set(usedQuestionIds);
-  let candidates = getQuestionsByLetter(letter, selectedCategories).filter(
-    (q) => !usedSet.has(q.id)
+
+  // 1. Strict match: selected subcategories + ageGroup + difficulty
+  const strictCandidates = getQuestionsByLetter(
+    letter,
+    selectedCategories,
+    filterOptions
+  ).filter((q) => !usedSet.has(q.id));
+
+  if (strictCandidates.length > 0) {
+    const chosen = strictCandidates[0];
+    incrementQuestionUsage(chosen.id);
+    return {
+      question: chosen,
+      exhausted: false,
+      shortageMessage: null,
+      fallbackAvailableCount: 0,
+    };
+  }
+
+  // Compute how many fallback questions exist for this letter (same categories any difficulty, or any category)
+  const sameCategoryAnyDiff = getQuestionsByLetter(letter, selectedCategories, {
+    ...filterOptions,
+    difficultyFilter: 'all',
+  }).filter((q) => !usedSet.has(q.id));
+
+  const anyCategoryPool = getQuestionsByLetter(letter).filter((q) => !usedSet.has(q.id));
+  const fallbackPool =
+    sameCategoryAnyDiff.length > 0 ? sameCategoryAnyDiff : anyCategoryPool;
+
+  // Sort fallback pool so closer/higher difficulties come first when host authorizes fallback
+  const diffRank: Record<string, number> = { expert: 4, hard: 3, medium: 2, easy: 1 };
+  fallbackPool.sort(
+    (a, b) => (diffRank[b.difficulty || 'medium'] || 2) - (diffRank[a.difficulty || 'medium'] || 2)
   );
 
-  if (candidates.length === 0 && selectedCategories.length < ALL_CATEGORIES.length) {
-    candidates = getQuestionsByLetter(letter).filter((q) => !usedSet.has(q.id));
+  if (allowExplicitFallback && fallbackPool.length > 0) {
+    const chosen = fallbackPool[0];
+    incrementQuestionUsage(chosen.id);
+    return {
+      question: chosen,
+      exhausted: false,
+      shortageMessage: null,
+      fallbackAvailableCount: fallbackPool.length - 1,
+    };
   }
 
-  if (candidates.length === 0) {
-    return { question: null, exhausted: true };
-  }
+  const diffKey = filterOptions?.difficultyFilter || 'all';
+  const diffLabel = DIFFICULTY_LABELS_AR[diffKey] || diffKey;
 
-  const chosen = candidates[0];
-  return { question: chosen, exhausted: false };
+  const shortageMessage =
+    fallbackPool.length > 0
+      ? `لا يتوفر سؤال لحرف «${letter}» بمستوى (${diffLabel}) في الفئات المحددة حاليًا (نقص: 1 سؤال على الأقل لهذا الحرف). يمنع النظام اختيار سؤال أسهل تلقائيًا — يتوفر (${fallbackPool.length}) سؤال بديل إذا أردت السماح به يدويًا.`
+      : `نفدت جميع الأسئلة المعتمدة لحرف «${letter}» في هذه المباراة.`;
+
+  return {
+    question: null,
+    exhausted: true,
+    shortageMessage,
+    fallbackAvailableCount: fallbackPool.length,
+  };
 }
 
 /**
@@ -86,7 +153,9 @@ export function createInitialRoomState(
     selectedCellId: null,
     currentQuestion: null,
     questionExhaustedForLetter: false,
-    questionRevealed: true,
+    questionShortageMessage: null,
+    fallbackAvailableCount: 0,
+    questionRevealed: false,
     answerRevealed: false,
     usedQuestionIds: [],
     moveHistory: [],
@@ -114,10 +183,14 @@ export function createInitialRoomState(
       timerSeconds: 30,
       answerTimerSeconds: 10,
       autoOpenBuzzerOnQuestion: false,
-      autoShowQuestionOnSelect: true,
+      autoShowQuestionOnSelect: false,
       theme: 'classic',
       fontFamily: 'Cairo',
       selectedCategories: [...ALL_CATEGORIES],
+      selectedSubCategories: [...ALL_SUBCATEGORY_IDS],
+      ageGroup: 'family_mixed',
+      difficultyFilter: 'all',
+      mosqueQuietMode: false,
       showLettersOnOwnedCells: false,
     },
     buzzer: createBuzzerState('idle', 1, 10),
@@ -145,6 +218,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
     settings: {
       ...state.settings,
       selectedCategories: [...state.settings.selectedCategories],
+      selectedSubCategories: [...(state.settings.selectedSubCategories || ALL_SUBCATEGORY_IDS)],
     },
     buzzer: {
       ...state.buzzer,
@@ -178,6 +252,17 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       }
       if (p.theme) next.settings.theme = p.theme;
       if (p.fontFamily) next.settings.fontFamily = p.fontFamily;
+      if (Array.isArray(p.selectedCategories) && p.selectedCategories.length > 0) {
+        next.settings.selectedCategories = [...p.selectedCategories];
+      }
+      if (Array.isArray(p.selectedSubCategories) && p.selectedSubCategories.length > 0) {
+        next.settings.selectedSubCategories = [...p.selectedSubCategories];
+      }
+      if (p.ageGroup) next.settings.ageGroup = p.ageGroup;
+      if (p.difficultyFilter) next.settings.difficultyFilter = p.difficultyFilter;
+      if (typeof p.mosqueQuietMode === 'boolean') {
+        next.settings.mosqueQuietMode = p.mosqueQuietMode;
+      }
 
       next.currentRound = 1;
       next.team1.roundsWon = 0;
@@ -189,6 +274,8 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       next.selectedCellId = null;
       next.currentQuestion = null;
       next.questionExhaustedForLetter = false;
+      next.questionShortageMessage = null;
+      next.fallbackAvailableCount = 0;
       next.questionRevealed = next.settings.autoShowQuestionOnSelect;
       next.answerRevealed = false;
       next.winningTeam = null;
@@ -226,14 +313,23 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       next.questionRevealed = next.settings.autoShowQuestionOnSelect;
       next.answerRevealed = false;
 
-      const { question, exhausted } = pickQuestionForLetter(
-        targetCell.letter,
-        next.usedQuestionIds,
-        next.settings.selectedCategories
-      );
+      const { question, exhausted, shortageMessage, fallbackAvailableCount } =
+        pickQuestionForLetter(
+          targetCell.letter,
+          next.usedQuestionIds,
+          next.settings.selectedCategories,
+          {
+            selectedSubCategories: next.settings.selectedSubCategories,
+            ageGroup: next.settings.ageGroup,
+            difficultyFilter: next.settings.difficultyFilter,
+          },
+          false
+        );
 
       next.currentQuestion = question;
       next.questionExhaustedForLetter = exhausted;
+      next.questionShortageMessage = shortageMessage;
+      next.fallbackAvailableCount = fallbackAvailableCount;
       if (question) {
         next.usedQuestionIds.push(question.id);
       }
@@ -255,6 +351,8 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       next.selectedCellId = null;
       next.currentQuestion = null;
       next.questionExhaustedForLetter = false;
+      next.questionShortageMessage = null;
+      next.fallbackAvailableCount = 0;
       next.questionRevealed = next.settings.autoShowQuestionOnSelect;
       next.answerRevealed = false;
       next.timerRunning = false;
@@ -299,19 +397,68 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
 
       next.questionRevealed = next.settings.autoShowQuestionOnSelect;
       next.answerRevealed = false;
-      const { question, exhausted } = pickQuestionForLetter(
-        cell.letter,
-        next.usedQuestionIds,
-        next.settings.selectedCategories
-      );
+      const { question, exhausted, shortageMessage, fallbackAvailableCount } =
+        pickQuestionForLetter(
+          cell.letter,
+          next.usedQuestionIds,
+          next.settings.selectedCategories,
+          {
+            selectedSubCategories: next.settings.selectedSubCategories,
+            ageGroup: next.settings.ageGroup,
+            difficultyFilter: next.settings.difficultyFilter,
+          },
+          false
+        );
 
       next.currentQuestion = question;
       next.questionExhaustedForLetter = exhausted;
+      next.questionShortageMessage = shortageMessage;
+      next.fallbackAvailableCount = fallbackAvailableCount;
       if (question) {
         next.usedQuestionIds.push(question.id);
       }
 
       // New unique questionNonce for the new question
+      const nextNonce = state.buzzer.questionNonce + 1;
+      next.buzzer = createBuzzerState(
+        next.settings.autoOpenBuzzerOnQuestion ? 'open' : 'locked',
+        nextNonce,
+        next.settings.answerTimerSeconds
+      );
+
+      next.timerRemaining = next.settings.timerSeconds;
+      next.timerRunning = next.settings.timerSeconds > 0;
+      return next;
+    }
+
+    case 'ALLOW_FALLBACK_QUESTION': {
+      if (next.selectedCellId === null) return state;
+      const cell = next.cells[next.selectedCellId];
+      if (!cell) return state;
+
+      next.questionRevealed = next.settings.autoShowQuestionOnSelect;
+      next.answerRevealed = false;
+      const { question, exhausted, shortageMessage, fallbackAvailableCount } =
+        pickQuestionForLetter(
+          cell.letter,
+          next.usedQuestionIds,
+          next.settings.selectedCategories,
+          {
+            selectedSubCategories: next.settings.selectedSubCategories,
+            ageGroup: next.settings.ageGroup,
+            difficultyFilter: next.settings.difficultyFilter,
+          },
+          true
+        );
+
+      next.currentQuestion = question;
+      next.questionExhaustedForLetter = exhausted;
+      next.questionShortageMessage = shortageMessage;
+      next.fallbackAvailableCount = fallbackAvailableCount;
+      if (question) {
+        next.usedQuestionIds.push(question.id);
+      }
+
       const nextNonce = state.buzzer.questionNonce + 1;
       next.buzzer = createBuzzerState(
         next.settings.autoOpenBuzzerOnQuestion ? 'open' : 'locked',

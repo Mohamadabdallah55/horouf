@@ -30,6 +30,7 @@ interface SideControlPanelProps {
   onToggleQuestionVisibility: () => void;
   onRevealOrHideAnswer: () => void;
   onNewQuestion: () => void;
+  onAllowFallbackQuestion?: () => void;
   onDeselectCell: () => void;
   onClaimCell: (team: TeamId) => void;
   onUndoMove: () => void;
@@ -47,6 +48,13 @@ interface SideControlPanelProps {
   onToggleDisplayMode: () => void;
 }
 
+const DIFF_BADGE_MAP: Record<string, { label: string; cls: string }> = {
+  easy: { label: 'سهل', cls: 'bg-emerald-500/25 text-emerald-300 border-emerald-400/40' },
+  medium: { label: 'متوسط', cls: 'bg-cyan-500/25 text-cyan-300 border-cyan-400/40' },
+  hard: { label: 'صعب', cls: 'bg-orange-500/25 text-orange-300 border-orange-400/40' },
+  expert: { label: 'خبير', cls: 'bg-rose-500/25 text-rose-300 border-rose-400/40' },
+};
+
 export const SideControlPanel: React.FC<SideControlPanelProps> = ({
   state,
   presence,
@@ -56,6 +64,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
   onToggleQuestionVisibility,
   onRevealOrHideAnswer,
   onNewQuestion,
+  onAllowFallbackQuestion,
   onDeselectCell,
   onClaimCell,
   onUndoMove,
@@ -344,13 +353,27 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
           <div
             className={`w-full flex-1 rounded-2xl border px-3.5 pt-8 pb-2.5 flex flex-col items-center justify-between text-center ${cardInnerBg}`}
           >
-            {/* Category & Timer Header */}
-            <div className="w-full flex items-center justify-between text-xs text-purple-200/80 px-1">
-              <span>
-                {state.currentQuestion
-                  ? state.currentQuestion.category
-                  : 'بنك الأسئلة · 336 سؤال'}
-              </span>
+            {/* Category, Difficulty & Timer Header */}
+            <div className="w-full flex items-center justify-between text-xs text-purple-200/80 px-1 gap-1">
+              <div className="flex items-center gap-1.5 truncate">
+                <span className="truncate">
+                  {state.currentQuestion
+                    ? state.currentQuestion.category
+                    : 'بنك الأسئلة الموثق PRO'}
+                </span>
+                {state.currentQuestion?.difficulty && (
+                  <span
+                    data-testid="question-difficulty-badge"
+                    className={`px-1.5 py-0.5 rounded-md border text-[10px] font-black shrink-0 ${
+                      DIFF_BADGE_MAP[state.currentQuestion.difficulty]?.cls ||
+                      'bg-white/10 text-white'
+                    }`}
+                  >
+                    {DIFF_BADGE_MAP[state.currentQuestion.difficulty]?.label ||
+                      state.currentQuestion.difficulty}
+                  </span>
+                )}
+              </div>
 
               {state.settings.timerSeconds > 0 && hasSelection && (
                 <div className="flex items-center gap-1">
@@ -394,7 +417,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
 
             {/* Question Body Text */}
             <div
-              className="my-auto py-2 px-1 flex items-center justify-center"
+              className="my-auto py-2 px-1 flex items-center justify-center w-full"
               data-testid="question-box"
             >
               {!hasSelection ? (
@@ -402,13 +425,26 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
                   اختر خلية لإظهار السؤال...
                 </p>
               ) : state.questionExhaustedForLetter ? (
-                <div className="space-y-1">
-                  <p className="text-sm font-extrabold text-amber-300">
-                    انتهت جميع الأسئلة المتاحة لحرف ({selectedCell.letter}) في هذه المباراة!
+                <div
+                  data-testid="question-shortage-alert"
+                  className="space-y-2 rounded-2xl bg-amber-500/15 border border-amber-400/50 p-3 w-full"
+                >
+                  <p className="text-xs sm:text-sm font-extrabold text-amber-300 leading-relaxed">
+                    {state.questionShortageMessage ||
+                      `انتهت جميع الأسئلة المتاحة لحرف (${selectedCell.letter}) في المستوى المحدد!`}
                   </p>
-                  <p className="text-xs text-white/75">
-                    يمكنك طرح سؤال خارجي مباشر أو منح الخلية للفريق الفائز.
-                  </p>
+                  {!isDisplayOnly &&
+                    (state.fallbackAvailableCount || 0) > 0 &&
+                    onAllowFallbackQuestion && (
+                      <button
+                        type="button"
+                        onClick={onAllowFallbackQuestion}
+                        data-testid="btn-allow-fallback-question"
+                        className="w-full py-2 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow cursor-pointer transition"
+                      >
+                        السماح بسؤال بديل لهذا الحرف ({state.fallbackAvailableCount} متاح)
+                      </button>
+                    )}
                 </div>
               ) : !state.questionRevealed ? (
                 <div

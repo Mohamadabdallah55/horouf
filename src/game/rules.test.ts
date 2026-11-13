@@ -11,10 +11,25 @@ import {
 import { checkTeamWin, evaluateBoardWinner } from './winDetector';
 import {
   ALL_CATEGORIES,
+  getEffectiveDifficultyForAge,
+  getLetterCoverageMatrix,
   getQuestionsByLetter,
-  normalizeArabicLetter,
   QUESTION_BANK,
 } from '../data/questions';
+import { SPORTS_VERIFIED_PACK_150 } from '../data/sportsQuestionsPack';
+import {
+  ALL_SUBCATEGORIES,
+  FEATURED_SHOWCASE_SUBCATEGORY_IDS,
+  MAIN_CATEGORIES_CATALOG,
+} from '../data/categoriesCatalog';
+import {
+  exportQuestionsToCsv,
+  parseImportedQuestions,
+} from '../data/expandedQuestions';
+import {
+  auditQuestionBank,
+  doesAnswerMatchLetter,
+} from './arabicNormalization';
 import {
   applyGameAction,
   createInitialRoomState,
@@ -41,34 +56,182 @@ test('Hexagonal board has 25 cells across 5 staggered rows and accurate odd-r ne
   assert.equal(areHexesAdjacent(toCellId(0, 1), toCellId(1, 2)), false);
 });
 
-test('Question bank has >= 300 verified Arabic questions across all 8 categories and 28 letters', () => {
+test('Question bank has >= 500 verified Arabic questions, >= 150 sports questions across all 28 letters and 4 difficulties, and 6 featured illustrated category cards', () => {
   assert.ok(
-    QUESTION_BANK.length >= 300,
-    `Expected >= 300 questions, got ${QUESTION_BANK.length}`
+    QUESTION_BANK.length >= 500,
+    `Expected >= 500 questions, got ${QUESTION_BANK.length}`
   );
+  assert.equal(MAIN_CATEGORIES_CATALOG.length, 16);
+  assert.equal(ALL_SUBCATEGORIES.length, 47);
+
+  // Check 6 featured showcase category cards
+  assert.equal(FEATURED_SHOWCASE_SUBCATEGORY_IDS.length, 6);
+  for (const subId of FEATURED_SHOWCASE_SUBCATEGORY_IDS) {
+    const sub = ALL_SUBCATEGORIES.find((s) => s.id === subId);
+    assert.ok(sub, `Featured subcategory ${subId} must exist`);
+    assert.equal(sub.isShowcaseFeatured, true);
+    assert.ok(sub.customImageUrl?.startsWith('/assets/cards/card_'));
+  }
+
+  // Check Sports Verified Pack >= 150 total sports questions across all 28 letters & 4 difficulties
+  const allSportsQuestions = QUESTION_BANK.filter((q) => q.mainCategory === 'sports');
+  assert.ok(
+    SPORTS_VERIFIED_PACK_150.length >= 135,
+    `Expected >= 135 in dedicated sports pack, got ${SPORTS_VERIFIED_PACK_150.length}`
+  );
+  assert.ok(
+    allSportsQuestions.length >= 165,
+    `Expected >= 165 total sports questions, got ${allSportsQuestions.length}`
+  );
+
+  for (const diff of ['easy', 'medium', 'hard', 'expert'] as const) {
+    const diffCount = allSportsQuestions.filter((q) => q.difficulty === diff).length;
+    assert.ok(diffCount >= 25, `Sports difficulty ${diff} should have >= 25 questions, got ${diffCount}`);
+  }
 
   for (const category of ALL_CATEGORIES) {
     const count = QUESTION_BANK.filter((q) => q.category === category).length;
     assert.ok(count > 0, `Category ${category} should have questions`);
   }
 
+  for (const mainCat of MAIN_CATEGORIES_CATALOG) {
+    const count = QUESTION_BANK.filter((q) => q.mainCategory === mainCat.id).length;
+    assert.ok(count > 0, `Main category ${mainCat.title} should have questions`);
+  }
+
   for (const letter of ALL_ARABIC_LETTERS) {
     const questions = getQuestionsByLetter(letter);
     assert.ok(
-      questions.length >= 10,
-      `Letter ${letter} should have at least 10 questions, got ${questions.length}`
+      questions.length >= 14,
+      `Letter ${letter} should have at least 14 questions, got ${questions.length}`
     );
 
-    const expectedNorm = normalizeArabicLetter(letter);
     for (const q of questions) {
-      const firstChar = normalizeArabicLetter(q.answer.trim()[0]);
+      const check = doesAnswerMatchLetter(q.answer, letter, q.acceptedAnswers);
       assert.equal(
-        firstChar,
-        expectedNorm,
-        `Answer "${q.answer}" for question "${q.question}" must start with "${expectedNorm}"`
+        check.valid,
+        true,
+        `Answer "${q.answer}" for question "${q.question}" (id: ${q.id}) must match letter "${letter}"`
       );
     }
   }
+
+  const auditIssues = auditQuestionBank(QUESTION_BANK);
+  const letterMismatchIssues = auditIssues.filter(
+    (i) => i.type === 'letter_mismatch'
+  );
+  assert.equal(
+    letterMismatchIssues.length,
+    0,
+    `Expected 0 invalid letter questions, found ${letterMismatchIssues.length}`
+  );
+});
+
+test('Arabic normalization handles الـ التعريف, Hamza variants (أ/إ/آ/ا), and هـ/ة accurately', () => {
+  // Definite article stripping
+  assert.equal(doesAnswerMatchLetter('البتراء', 'ب').valid, true);
+  assert.equal(doesAnswerMatchLetter('القدس', 'ق').valid, true);
+  assert.equal(doesAnswerMatchLetter('الأردن', 'أ').valid, true);
+  assert.equal(doesAnswerMatchLetter('إبراهيم', 'أ').valid, true);
+  assert.equal(doesAnswerMatchLetter('آدم', 'أ').valid, true);
+  assert.equal(doesAnswerMatchLetter('ابن تيمية', 'أ').valid, true);
+  assert.equal(doesAnswerMatchLetter('هدهد', 'هـ').valid, true);
+  assert.equal(doesAnswerMatchLetter('الهدهد', 'هـ').valid, true);
+
+  // Prefix stripping
+  assert.equal(doesAnswerMatchLetter('سورة الكهف', 'ك').valid, true);
+  assert.equal(doesAnswerMatchLetter('غزوة بدر', 'ب').valid, true);
+
+  // Negative check
+  assert.equal(doesAnswerMatchLetter('دمشق', 'ب').valid, false);
+});
+
+test('Strict Difficulty & Category Filtering: NEVER silently falls back to easy/medium when hard/expert is selected, and calibrates by ageGroup', () => {
+  // 1. Filter by specific subcategory (Jordan)
+  const jordanPick = pickQuestionForLetter('ع', [], undefined, {
+    selectedSubCategories: ['hashemite_jordan'],
+  });
+  assert.ok(jordanPick.question !== null);
+  assert.equal(jordanPick.question.subCategory, 'hashemite_jordan');
+
+  // 2. Selecting 'hard' or 'expert' NEVER returns 'easy' or 'medium'
+  for (const strictDiff of ['hard', 'expert'] as const) {
+    const picked = pickQuestionForLetter('أ', [], undefined, {
+      difficultyFilter: strictDiff,
+      ageGroup: 'adults_18_plus',
+    });
+    assert.ok(picked.question !== null);
+    assert.equal(picked.question.difficulty, strictDiff);
+  }
+
+  // 3. When all 'expert' questions for a letter are exhausted, it MUST NOT silently fall back to easy/medium!
+  const expertForZ = getQuestionsByLetter('ظ', undefined, {
+    difficultyFilter: 'expert',
+    ageGroup: 'adults_18_plus',
+  });
+  const usedExpertIds = expertForZ.map((q) => q.id);
+
+  const strictExhausted = pickQuestionForLetter('ظ', usedExpertIds, undefined, {
+    difficultyFilter: 'expert',
+    ageGroup: 'adults_18_plus',
+  });
+  assert.equal(strictExhausted.question, null);
+  assert.equal(strictExhausted.exhausted, true);
+  assert.ok(strictExhausted.shortageMessage && strictExhausted.shortageMessage.includes('يمنع النظام اختيار سؤال أسهل تلقائيًا'));
+  assert.ok(strictExhausted.fallbackAvailableCount > 0);
+
+  // 4. Only when allowExplicitFallback = true (or ALLOW_FALLBACK_QUESTION action) is a fallback returned
+  const explicitFallback = pickQuestionForLetter(
+    'ظ',
+    usedExpertIds,
+    undefined,
+    {
+      difficultyFilter: 'expert',
+      ageGroup: 'adults_18_plus',
+    },
+    true
+  );
+  assert.ok(explicitFallback.question !== null);
+  assert.equal(explicitFallback.exhausted, false);
+
+  // 5. Age-relative difficulty shift: a 'medium' question becomes 'hard' for kids_6_9
+  const sampleMedium = QUESTION_BANK.find((q) => q.difficulty === 'medium')!;
+  assert.equal(getEffectiveDifficultyForAge(sampleMedium, 'adults_18_plus'), 'medium');
+  assert.equal(getEffectiveDifficultyForAge(sampleMedium, 'kids_6_9'), 'hard');
+
+  // 6. 28-letter coverage matrix returns accurate counts for all 28 letters
+  const matrix = getLetterCoverageMatrix({
+    selectedSubCategories: ['football_general', 'world_cup', 'european_clubs', 'arab_leagues', 'olympics_multi_sports'],
+    difficultyFilter: 'all',
+  });
+  assert.equal(matrix.letters.length, 28);
+  assert.equal(matrix.isFullyCovered, true);
+
+  // Test JSON import validation
+  const sampleJson = JSON.stringify([
+    {
+      letter: 'ب',
+      question: 'ما اسم المدينة الوردية المنحوتة في الصخر في الأردن؟',
+      answer: 'البتراء',
+      mainCategory: 'jordan_arab_world',
+      subCategory: 'hashemite_jordan',
+      difficulty: 'easy',
+    },
+    {
+      letter: 'س',
+      question: 'سؤال تجريبي خاطئ الحرف؟',
+      answer: 'البتراء',
+    },
+  ]);
+  const parsedJson = parseImportedQuestions(sampleJson, 'json');
+  assert.equal(parsedJson.imported.length, 1);
+  assert.equal(parsedJson.errors.length, 1);
+
+  // Test CSV export and re-import
+  const csvText = exportQuestionsToCsv(parsedJson.imported);
+  const parsedCsv = parseImportedQuestions(csvText, 'csv');
+  assert.equal(parsedCsv.imported.length, 1);
+  assert.equal(parsedCsv.imported[0].answer, 'البتراء');
 });
 
 test('Question selection does not repeat questions in a match and handles exhaustion cleanly', () => {
@@ -221,21 +384,20 @@ test('Atomic Buzzer System: premature press, opening, first press wins, simultan
   assert.equal(state.buzzer.winner, null);
   assert.equal(state.buzzer.lockedOutTeams.length, 0);
 
-  // 11. Question show/hide from controller works and respects autoShowQuestionOnSelect
+  // 11. Question starts hidden on TV by default (only referee sees it first), then referee shows/hides it
   state = applyGameAction(state, { type: 'SELECT_CELL', payload: { cellId: 3 } });
-  assert.equal(state.questionRevealed, true);
-
-  state = applyGameAction(state, { type: 'HIDE_QUESTION' });
   assert.equal(state.questionRevealed, false);
 
   state = applyGameAction(state, { type: 'SHOW_QUESTION' });
   assert.equal(state.questionRevealed, true);
 
+  state = applyGameAction(state, { type: 'HIDE_QUESTION' });
+  assert.equal(state.questionRevealed, false);
+
   state = applyGameAction(state, {
     type: 'UPDATE_SETTINGS',
-    payload: { autoShowQuestionOnSelect: false },
+    payload: { autoShowQuestionOnSelect: true },
   });
   state = applyGameAction(state, { type: 'SELECT_CELL', payload: { cellId: 4 } });
-  assert.equal(state.questionRevealed, false);
+  assert.equal(state.questionRevealed, true);
 });
-

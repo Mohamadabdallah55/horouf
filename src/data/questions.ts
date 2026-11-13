@@ -1,4 +1,15 @@
-import { QuestionCategory, QuestionItem } from '../types/game';
+import {
+  AgeGroupId,
+  DifficultyLevel,
+  QuestionCategory,
+  QuestionItem,
+} from '../types/game';
+import { ALL_ARABIC_LETTERS } from '../game/hexMath';
+import {
+  EXTRA_VERIFIED_QUESTIONS,
+  enrichLegacyQuestion,
+} from './expandedQuestions';
+import { SPORTS_VERIFIED_PACK_150 } from './sportsQuestionsPack';
 
 export const ALL_CATEGORIES: QuestionCategory[] = [
   'معلومات عامة',
@@ -418,33 +429,314 @@ export function normalizeArabicLetter(letter: string): string {
   return trimmed;
 }
 
-/**
- * Build the flat, indexed QuestionItem array (336 verified questions across 28 letters).
- */
-export const QUESTION_BANK: QuestionItem[] = Object.entries(RAW_QUESTIONS_BY_LETTER).flatMap(
-  ([letter, items]) =>
-    items.map(([question, answer, category], index) => ({
-      id: `q_${letter}_${index + 1}`,
-      letter,
-      question,
-      answer,
-      category,
-    }))
+const BASE_ENRICHED_QUESTIONS: QuestionItem[] = Object.entries(
+  RAW_QUESTIONS_BY_LETTER
+).flatMap(([letter, items]) =>
+  items.map(([question, answer, category], index) =>
+    enrichLegacyQuestion(
+      {
+        id: `q_${letter}_${index + 1}`,
+        letter,
+        question,
+        answer,
+        category,
+      },
+      index
+    )
+  )
+);
+
+const EXTRA_ENRICHED_QUESTIONS: QuestionItem[] = EXTRA_VERIFIED_QUESTIONS.map(
+  (seed, idx) => ({
+    id: `q_pro_${normalizeArabicLetter(seed.letter)}_${idx + 1}`,
+    letter: normalizeArabicLetter(seed.letter),
+    question: seed.question,
+    answer: seed.answer,
+    acceptedAnswers: seed.acceptedAnswers || [],
+    category: seed.legacyCategory,
+    mainCategory: seed.mainCategory,
+    subCategory: seed.subCategory,
+    ageGroups: seed.ageGroups,
+    difficulty: seed.difficulty,
+    source: seed.source,
+    verifiedAt: '2026-02-20',
+    status: 'approved',
+    updatedAt: '2026-02-20T00:00:00.000Z',
+    usageCount: 0,
+  })
+);
+
+const SPORTS_PACK_NORMALIZED: QuestionItem[] = SPORTS_VERIFIED_PACK_150.map(
+  (q) => ({
+    ...q,
+    letter: normalizeArabicLetter(q.letter),
+    updatedAt: q.updatedAt || '2026-03-01T00:00:00.000Z',
+  })
 );
 
 /**
- * Helper to fetch all questions for a given Arabic letter, optionally filtered by categories.
+ * Build the flat, indexed QuestionItem array (525+ verified questions across 28 letters, 16 main categories, 37 subcategories, and 150+ verified sports items).
  */
-export function getQuestionsByLetter(
-  letter: string,
-  allowedCategories?: QuestionCategory[]
-): QuestionItem[] {
-  const norm = normalizeArabicLetter(letter);
-  return QUESTION_BANK.filter((q) => {
-    if (normalizeArabicLetter(q.letter) !== norm) return false;
-    if (allowedCategories && allowedCategories.length > 0) {
-      return allowedCategories.includes(q.category);
+export const QUESTION_BANK: QuestionItem[] = [
+  ...EXTRA_ENRICHED_QUESTIONS,
+  ...SPORTS_PACK_NORMALIZED,
+  ...BASE_ENRICHED_QUESTIONS,
+];
+
+let customQuestionsRuntime: QuestionItem[] = [];
+const deletedQuestionIdsRuntime = new Set<string>();
+const questionUsageMap = new Map<string, number>();
+const questionLastUsedMap = new Map<string, string>();
+
+export function getActiveQuestionBank(includeUnapproved = false): QuestionItem[] {
+  const byId = new Map<string, QuestionItem>();
+  for (const q of QUESTION_BANK) {
+    if (!deletedQuestionIdsRuntime.has(q.id)) {
+      byId.set(q.id, {
+        ...q,
+        usageCount: questionUsageMap.get(q.id) ?? q.usageCount ?? 0,
+        lastUsedAt: questionLastUsedMap.get(q.id) ?? q.lastUsedAt ?? null,
+      });
     }
+  }
+  for (const cq of customQuestionsRuntime) {
+    if (!deletedQuestionIdsRuntime.has(cq.id)) {
+      byId.set(cq.id, {
+        ...cq,
+        usageCount: questionUsageMap.get(cq.id) ?? cq.usageCount ?? 0,
+        lastUsedAt: questionLastUsedMap.get(cq.id) ?? cq.lastUsedAt ?? null,
+      });
+    }
+  }
+  const all = Array.from(byId.values());
+  if (includeUnapproved) return all;
+  return all.filter((q) => !q.status || q.status === 'approved');
+}
+
+export function setRuntimeCustomQuestions(
+  customList: QuestionItem[],
+  deletedIds: string[] = []
+): void {
+  customQuestionsRuntime = [...customList];
+  deletedQuestionIdsRuntime.clear();
+  deletedIds.forEach((id) => deletedQuestionIdsRuntime.add(id));
+}
+
+export function upsertRuntimeQuestion(item: QuestionItem): void {
+  deletedQuestionIdsRuntime.delete(item.id);
+  const idx = customQuestionsRuntime.findIndex((q) => q.id === item.id);
+  if (idx >= 0) {
+    customQuestionsRuntime[idx] = { ...item, updatedAt: new Date().toISOString() };
+  } else {
+    customQuestionsRuntime.unshift({ ...item, updatedAt: new Date().toISOString() });
+  }
+}
+
+export function deleteRuntimeQuestion(id: string): void {
+  deletedQuestionIdsRuntime.add(id);
+  customQuestionsRuntime = customQuestionsRuntime.filter((q) => q.id !== id);
+}
+
+export function incrementQuestionUsage(id: string): void {
+  questionUsageMap.set(id, (questionUsageMap.get(id) || 0) + 1);
+  questionLastUsedMap.set(id, new Date().toISOString());
+}
+
+/**
+ * Computes the effective difficulty of a question relative to the target AgeGroupId.
+ * A question that is 'medium' for adults is 'hard' for kids_6_9;
+ * a question that is 'hard' for adults is 'expert' for kids_6_9 / juniors_10_13.
+ */
+export function getEffectiveDifficultyForAge(
+  q: QuestionItem,
+  ageGroup?: AgeGroupId
+): DifficultyLevel {
+  const base: DifficultyLevel = q.difficulty || 'medium';
+  if (!ageGroup || ageGroup === 'adults_18_plus' || ageGroup === 'family_mixed' || ageGroup === 'custom') {
+    return base;
+  }
+
+  if (ageGroup === 'kids_6_9') {
+    if (base === 'easy') return 'easy';
+    if (base === 'medium') return 'hard';
+    return 'expert';
+  }
+
+  if (ageGroup === 'juniors_10_13') {
+    if (base === 'easy') return 'easy';
+    if (base === 'medium') return 'medium';
+    if (base === 'hard') return 'hard';
+    return 'expert';
+  }
+
+  return base;
+}
+
+export interface QuestionFilterOptions {
+  allowedCategories?: QuestionCategory[];
+  selectedSubCategories?: string[];
+  ageGroup?: AgeGroupId;
+  difficultyFilter?: DifficultyLevel | 'all';
+}
+
+/**
+ * Helper to fetch all approved questions strictly matching filter options.
+ * NEVER silently substitutes easy/medium questions when 'hard' or 'expert' is selected,
+ * and NEVER includes unselected categories/subcategories.
+ */
+export function getFilteredQuestions(options?: QuestionFilterOptions): QuestionItem[] {
+  const bank = getActiveQuestionBank(false);
+  if (!options) return bank;
+
+  return bank.filter((q) => {
+    // 1. Strict subcategory or legacy category check
+    if (options.selectedSubCategories && options.selectedSubCategories.length > 0) {
+      if (!q.subCategory || !options.selectedSubCategories.includes(q.subCategory)) {
+        return false;
+      }
+    } else if (options.allowedCategories && options.allowedCategories.length > 0) {
+      if (!options.allowedCategories.includes(q.category)) {
+        return false;
+      }
+    }
+
+    // 2. Age group compatibility check
+    if (
+      options.ageGroup &&
+      options.ageGroup !== 'family_mixed' &&
+      options.ageGroup !== 'custom' &&
+      q.ageGroups &&
+      q.ageGroups.length > 0
+    ) {
+      // Allow if explicitly tagged for this ageGroup OR if the user requested hard/expert for younger groups where shifted difficulty applies
+      const effectiveDiff = getEffectiveDifficultyForAge(q, options.ageGroup);
+      const matchesShiftedDiff =
+        options.difficultyFilter &&
+        options.difficultyFilter !== 'all' &&
+        effectiveDiff === options.difficultyFilter;
+
+      if (!q.ageGroups.includes(options.ageGroup) && !matchesShiftedDiff) {
+        return false;
+      }
+    }
+
+    // 3. Strict difficulty check (NEVER return easy/medium when hard/expert is requested)
+    if (options.difficultyFilter && options.difficultyFilter !== 'all') {
+      const effectiveDiff = getEffectiveDifficultyForAge(q, options.ageGroup);
+      if (effectiveDiff !== options.difficultyFilter) {
+        return false;
+      }
+    }
+
     return true;
   });
 }
+
+/**
+ * Helper to fetch all questions for a given Arabic letter, strictly filtered by categories, subcategories, age group, and difficulty.
+ */
+export function getQuestionsByLetter(
+  letter: string,
+  allowedCategories?: QuestionCategory[],
+  filterOptions?: QuestionFilterOptions
+): QuestionItem[] {
+  const norm = normalizeArabicLetter(letter);
+  const pool = getFilteredQuestions({
+    allowedCategories,
+    ...filterOptions,
+  });
+
+  return pool
+    .filter((q) => normalizeArabicLetter(q.letter) === norm)
+    .sort((a, b) => (a.usageCount || 0) - (b.usageCount || 0));
+}
+
+export interface LetterCoverageCell {
+  letter: string;
+  totalMatching: number;
+  unusedMatching: number;
+  byDifficulty: {
+    easy: number;
+    medium: number;
+    hard: number;
+    expert: number;
+  };
+  hasShortage: boolean;
+}
+
+export interface LetterCoverageSummary {
+  letters: LetterCoverageCell[];
+  totalMatchingQuestions: number;
+  lettersWithZeroQuestions: string[];
+  lettersBelowThreeQuestions: string[];
+  readyLettersCount: number;
+  isFullyCovered: boolean;
+}
+
+/**
+ * Computes a complete 28-letter statistical readiness matrix for the currently selected categories, age group, and difficulty.
+ */
+export function getLetterCoverageMatrix(
+  filterOptions?: QuestionFilterOptions,
+  usedQuestionIds: string[] = []
+): LetterCoverageSummary {
+  const usedSet = new Set(usedQuestionIds);
+
+  // Pool matching categories + age group (for difficulty breakdown per letter)
+  const categoryAgePool = getFilteredQuestions({
+    ...filterOptions,
+    difficultyFilter: 'all',
+  });
+
+  // Pool strictly matching categories + age group + selected difficulty
+  const strictPool = getFilteredQuestions(filterOptions);
+
+  const letters: LetterCoverageCell[] = ALL_ARABIC_LETTERS.map((rawLetter) => {
+    const norm = normalizeArabicLetter(rawLetter);
+    const letterCatQuestions = categoryAgePool.filter(
+      (q) => normalizeArabicLetter(q.letter) === norm
+    );
+    const letterStrictQuestions = strictPool.filter(
+      (q) => normalizeArabicLetter(q.letter) === norm
+    );
+    const unusedStrict = letterStrictQuestions.filter((q) => !usedSet.has(q.id));
+
+    const byDifficulty = {
+      easy: 0,
+      medium: 0,
+      hard: 0,
+      expert: 0,
+    };
+
+    for (const q of letterCatQuestions) {
+      const eff = getEffectiveDifficultyForAge(q, filterOptions?.ageGroup);
+      byDifficulty[eff] = (byDifficulty[eff] || 0) + 1;
+    }
+
+    return {
+      letter: rawLetter,
+      totalMatching: letterStrictQuestions.length,
+      unusedMatching: unusedStrict.length,
+      byDifficulty,
+      hasShortage: unusedStrict.length === 0,
+    };
+  });
+
+  const lettersWithZeroQuestions = letters
+    .filter((l) => l.unusedMatching === 0)
+    .map((l) => l.letter);
+  const lettersBelowThreeQuestions = letters
+    .filter((l) => l.unusedMatching > 0 && l.unusedMatching < 3)
+    .map((l) => l.letter);
+
+  return {
+    letters,
+    totalMatchingQuestions: strictPool.length,
+    lettersWithZeroQuestions,
+    lettersBelowThreeQuestions,
+    readyLettersCount: 28 - lettersWithZeroQuestions.length,
+    isFullyCovered: lettersWithZeroQuestions.length === 0,
+  };
+}
+
+

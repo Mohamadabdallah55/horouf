@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ContentAdminModal } from './components/ContentAdminModal';
 import { HexBoard } from './components/HexBoard';
 import { HostMobileView } from './components/HostMobileView';
 import { RoomSyncModal } from './components/RoomSyncModal';
@@ -7,16 +8,22 @@ import { StudioMenuDrawer } from './components/StudioMenuDrawer';
 import { TeamBuzzerScreen } from './components/TeamBuzzerScreen';
 import { TitleAndSetupModal } from './components/TitleAndSetupModal';
 import { VictoryModal } from './components/VictoryModal';
+import { setRuntimeCustomQuestions } from './data/questions';
 import { applyGameAction, createInitialRoomState } from './game/gameEngine';
 import {
   CellOwner,
   ClientRole,
   GameAction,
+  MatchHistoryRecord,
   RoomGameState,
   RoomPresence,
   TeamId,
 } from './types/game';
 import { soundFX } from './utils/soundEffects';
+
+const CUSTOM_QUESTIONS_STORAGE_KEY = 'mosque_custom_questions_v1';
+const CUSTOM_CARD_IMAGES_STORAGE_KEY = 'mosque_custom_card_images_v1';
+const MATCH_HISTORY_STORAGE_KEY = 'mosque_match_history_v1';
 
 function getOrCreateDeviceId(): string {
   if (typeof window === 'undefined') return 'server_dev';
@@ -86,18 +93,89 @@ export default function App() {
     team2Connected: false,
     team1DeviceId: null,
     team2DeviceId: null,
+    team2ConnectedCount: undefined,
     total: 1,
-  });
+  } as RoomPresence);
 
   const [isMuted, setIsMuted] = useState<boolean>(() => soundFX.isMuted());
   const [correctionMode, setCorrectionMode] = useState<boolean>(false);
   const [menuDrawerOpen, setMenuDrawerOpen] = useState<boolean>(false);
   const [syncModalOpen, setSyncModalOpen] = useState<boolean>(false);
+  const [contentAdminOpen, setContentAdminOpen] = useState<boolean>(false);
+  const [, setQuestionsBankVersion] = useState<number>(0);
+
+  // Persisted Custom Card Images & Match History
+  const [customCardImages, setCustomCardImages] = useState<Record<string, string>>(
+    () => {
+      if (typeof window === 'undefined') return {};
+      try {
+        const raw = window.localStorage.getItem(CUSTOM_CARD_IMAGES_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch {
+        return {};
+      }
+    }
+  );
+
+  const [matchHistory, setMatchHistory] = useState<MatchHistoryRecord[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = window.localStorage.getItem(MATCH_HISTORY_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Load saved custom questions into runtime question bank on startup
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(CUSTOM_QUESTIONS_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setRuntimeCustomQuestions(parsed);
+          setQuestionsBankVersion((v) => v + 1);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleUpdateCustomCardImage = useCallback(
+    (subCategoryId: string, imageUrl: string) => {
+      setCustomCardImages((prev) => {
+        const next = { ...prev };
+        if (!imageUrl) {
+          delete next[subCategoryId];
+        } else {
+          next[subCategoryId] = imageUrl;
+        }
+        try {
+          window.localStorage.setItem(
+            CUSTOM_CARD_IMAGES_STORAGE_KEY,
+            JSON.stringify(next)
+          );
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+    },
+    []
+  );
 
   const wsRef = useRef<WebSocket | null>(null);
   const prevPhaseRef = useRef(gameState.phase);
   const prevTimerRef = useRef(gameState.timerRemaining);
   const prevBuzzerWinnerRef = useRef<TeamId | null>(null);
+
+  // Sync Mosque Quiet Mode with Sound System
+  useEffect(() => {
+    soundFX.setMosqueQuietMode(!!gameState.settings.mosqueQuietMode);
+  }, [gameState.settings.mosqueQuietMode]);
 
   // Sync body dataset state for testing & accessibility compliance
   useEffect(() => {
@@ -115,7 +193,7 @@ export default function App() {
     document.body.dataset.state = bodyState;
   }, [gameState.phase]);
 
-  // Play victory fanfare when round/match is won
+  // Play victory fanfare & record match history when round/match is won
   useEffect(() => {
     if (
       (gameState.phase === 'round_victory' ||
@@ -124,9 +202,52 @@ export default function App() {
       prevPhaseRef.current !== 'match_victory'
     ) {
       soundFX.playVictoryFanfare();
+
+      if (gameState.winningTeam) {
+        const record: MatchHistoryRecord = {
+          id: `match_${Date.now()}`,
+          playedAt: new Date().toISOString(),
+          team1Name: gameState.team1.name,
+          team2Name: gameState.team2.name,
+          winnerName:
+            gameState.winningTeam === 'team1'
+              ? gameState.team1.name
+              : gameState.team2.name,
+          team1RoundsWon: gameState.team1.roundsWon,
+          team2RoundsWon: gameState.team2.roundsWon,
+          totalRounds: gameState.settings.totalRounds,
+          categoriesUsed:
+            gameState.settings.selectedSubCategories || [],
+          ageGroup: gameState.settings.ageGroup || 'family_mixed',
+          difficultyFilter: gameState.settings.difficultyFilter || 'all',
+        };
+        setMatchHistory((prev) => {
+          const next = [record, ...prev].slice(0, 50);
+          try {
+            window.localStorage.setItem(
+              MATCH_HISTORY_STORAGE_KEY,
+              JSON.stringify(next)
+            );
+          } catch {
+            // ignore
+          }
+          return next;
+        });
+      }
     }
     prevPhaseRef.current = gameState.phase;
-  }, [gameState.phase]);
+  }, [
+    gameState.phase,
+    gameState.winningTeam,
+    gameState.team1.name,
+    gameState.team2.name,
+    gameState.team1.roundsWon,
+    gameState.team2.roundsWon,
+    gameState.settings.totalRounds,
+    gameState.settings.selectedSubCategories,
+    gameState.settings.ageGroup,
+    gameState.settings.difficultyFilter,
+  ]);
 
   // Play sound cue when a team wins the buzzer race automatically
   useEffect(() => {
@@ -388,7 +509,12 @@ export default function App() {
           target.tagName === 'SELECT');
       if (isInput) return;
 
-      if (gameState.phase === 'title' && (e.key === 'Enter' || e.key === ' ')) {
+      if (
+        gameState.phase === 'title' &&
+        !contentAdminOpen &&
+        !syncModalOpen &&
+        (e.key === 'Enter' || e.key === ' ')
+      ) {
         e.preventDefault();
         dispatchAction({ type: 'START_MATCH' });
         return;
@@ -398,7 +524,8 @@ export default function App() {
         const nextMuted = soundFX.toggleMute();
         setIsMuted(nextMuted);
       } else if (e.key === 'Escape') {
-        if (menuDrawerOpen) setMenuDrawerOpen(false);
+        if (contentAdminOpen) setContentAdminOpen(false);
+        else if (menuDrawerOpen) setMenuDrawerOpen(false);
         else if (syncModalOpen) setSyncModalOpen(false);
         else if (correctionMode) setCorrectionMode(false);
         else if (gameState.selectedCellId !== null) {
@@ -413,6 +540,7 @@ export default function App() {
     role,
     gameState.phase,
     gameState.selectedCellId,
+    contentAdminOpen,
     menuDrawerOpen,
     syncModalOpen,
     correctionMode,
@@ -492,10 +620,11 @@ export default function App() {
         />
       )}
 
-      {/* Title & Match Setup Screen */}
+      {/* Title, Pre-Match Category Library & Match Setup Screen */}
       {gameState.phase === 'title' && !isDisplayOnly && (
         <TitleAndSetupModal
           state={gameState}
+          customCardImages={customCardImages}
           onStartMatch={(cfg) => {
             if (document.activeElement instanceof HTMLElement) {
               document.activeElement.blur();
@@ -503,6 +632,7 @@ export default function App() {
             dispatchAction({ type: 'START_MATCH', payload: cfg });
           }}
           onOpenSyncModal={() => setSyncModalOpen(true)}
+          onOpenContentAdmin={() => setContentAdminOpen(true)}
           onSwitchToDisplayMode={() => handleSwitchRole('display')}
         />
       )}
@@ -571,6 +701,9 @@ export default function App() {
             })
           }
           onNewQuestion={() => dispatchAction({ type: 'NEW_QUESTION' })}
+          onAllowFallbackQuestion={() =>
+            dispatchAction({ type: 'ALLOW_FALLBACK_QUESTION' })
+          }
           onDeselectCell={() => dispatchAction({ type: 'DESELECT_CELL' })}
           onClaimCell={(team: TeamId) =>
             dispatchAction({ type: 'CLAIM_CELL', payload: { team } })
@@ -624,6 +757,7 @@ export default function App() {
           onReturnToTitle={() =>
             dispatchAction({ type: 'SET_PHASE', payload: { phase: 'title' } })
           }
+          onOpenContentAdmin={() => setContentAdminOpen(true)}
           onCorrectCellOwner={(cellId, owner) =>
             dispatchAction({
               type: 'CORRECT_CELL_OWNER',
@@ -659,6 +793,17 @@ export default function App() {
           onUpdateSettings={(partial) =>
             dispatchAction({ type: 'UPDATE_SETTINGS', payload: partial })
           }
+        />
+      )}
+
+      {/* Content & Question Bank Administration Modal */}
+      {contentAdminOpen && (
+        <ContentAdminModal
+          onClose={() => setContentAdminOpen(false)}
+          matchHistory={matchHistory}
+          customCardImages={customCardImages}
+          onUpdateCustomCardImage={handleUpdateCustomCardImage}
+          onQuestionsUpdated={() => setQuestionsBankVersion((v) => v + 1)}
         />
       )}
     </main>

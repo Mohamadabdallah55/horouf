@@ -2,6 +2,9 @@ export type TeamId = 'team1' | 'team2';
 export type CellOwner = 'none' | TeamId;
 export type ClientRole = 'studio' | 'display' | 'host' | 'team1' | 'team2';
 
+/**
+ * Legacy 8 categories (preserved for backward compatibility) + Expanded 16 Main Categories
+ */
 export type QuestionCategory =
   | 'معلومات عامة'
   | 'علوم'
@@ -10,7 +13,77 @@ export type QuestionCategory =
   | 'رياضة'
   | 'ثقافة عربية'
   | 'معلومات إسلامية'
-  | 'ألغاز';
+  | 'ألغاز'
+  | 'دول وجغرافيا'
+  | 'تاريخ وحضارات'
+  | 'ثقافة إسلامية'
+  | 'القرآن والسيرة'
+  | 'لغة عربية وآداب'
+  | 'تكنولوجيا وحاسوب'
+  | 'ألعاب فيديو'
+  | 'شهرة وفنون ومحتوى ترفيهي مناسب'
+  | 'منوعات'
+  | 'ألغاز وذكاء'
+  | 'طبيعة وحيوانات'
+  | 'الأردن والعالم العربي'
+  | 'عائلات وأطفال';
+
+export type MainCategoryId =
+  | 'sports'
+  | 'science'
+  | 'geography'
+  | 'history'
+  | 'islamic_culture'
+  | 'quran_seerah'
+  | 'arabic_lit'
+  | 'technology'
+  | 'video_games'
+  | 'culture_media'
+  | 'misc'
+  | 'general_knowledge'
+  | 'riddles_logic'
+  | 'nature_animals'
+  | 'jordan_arab_world'
+  | 'families_kids';
+
+export type AgeGroupId =
+  | 'kids_6_9'
+  | 'juniors_10_13'
+  | 'youth_14_17'
+  | 'adults_18_plus'
+  | 'family_mixed'
+  | 'custom';
+
+export type DifficultyLevel = 'easy' | 'medium' | 'hard' | 'expert';
+export type QuestionStatus = 'approved' | 'pending_review' | 'draft';
+
+export interface SubCategoryDefinition {
+  id: string;
+  mainCategoryId: MainCategoryId;
+  title: string;
+  description: string;
+  artworkTheme: string;
+  gradientFrom: string;
+  gradientTo: string;
+  accentColor: string;
+  ageSuitability: AgeGroupId[];
+  defaultDifficulty: DifficultyLevel;
+  imageSourceAttribution: string;
+  imageLicense: string;
+  customImageUrl?: string;
+  isShowcaseFeatured?: boolean;
+}
+
+export interface MainCategoryDefinition {
+  id: MainCategoryId;
+  title: string;
+  legacyCategoryName: QuestionCategory;
+  description: string;
+  badgeColor: string;
+  badgeBorder: string;
+  iconName: string;
+  subCategories: SubCategoryDefinition[];
+}
 
 export interface QuestionItem {
   id: string;
@@ -18,6 +91,41 @@ export interface QuestionItem {
   question: string;
   answer: string;
   category: QuestionCategory;
+  acceptedAnswers?: string[];
+  mainCategory?: MainCategoryId;
+  subCategory?: string;
+  ageGroups?: AgeGroupId[];
+  difficulty?: DifficultyLevel;
+  source?: string;
+  verifiedAt?: string;
+  status?: QuestionStatus;
+  updatedAt?: string;
+  usageCount?: number;
+  lastUsedAt?: string | null;
+}
+
+export interface CategoryPreset {
+  id: string;
+  name: string;
+  description: string;
+  ageGroup: AgeGroupId;
+  difficultyFilter: DifficultyLevel | 'all';
+  selectedSubCategories: string[];
+  createdAt: string;
+}
+
+export interface MatchHistoryRecord {
+  id: string;
+  playedAt: string;
+  team1Name: string;
+  team2Name: string;
+  team1RoundsWon: number;
+  team2RoundsWon: number;
+  winnerName: string;
+  totalRounds: number;
+  ageGroup: AgeGroupId;
+  difficultyFilter: DifficultyLevel | 'all';
+  categoriesUsed: string[];
 }
 
 export interface HexCell {
@@ -60,6 +168,10 @@ export interface GameSettings {
   theme: VisualThemeId;
   fontFamily: FontFamilyId;
   selectedCategories: QuestionCategory[];
+  selectedSubCategories: string[];
+  ageGroup: AgeGroupId;
+  difficultyFilter: DifficultyLevel | 'all';
+  mosqueQuietMode: boolean;
   showLettersOnOwnedCells: boolean;
 }
 
@@ -119,6 +231,8 @@ export interface RoomGameState {
   selectedCellId: number | null;
   currentQuestion: QuestionItem | null;
   questionExhaustedForLetter: boolean;
+  questionShortageMessage?: string | null;
+  fallbackAvailableCount?: number;
   questionRevealed: boolean;
   answerRevealed: boolean;
   usedQuestionIds: string[];
@@ -151,6 +265,11 @@ export type GameAction =
         autoShowQuestionOnSelect: boolean;
         theme: VisualThemeId;
         fontFamily: FontFamilyId;
+        selectedCategories: QuestionCategory[];
+        selectedSubCategories: string[];
+        ageGroup: AgeGroupId;
+        difficultyFilter: DifficultyLevel | 'all';
+        mosqueQuietMode: boolean;
       }>;
     }
   | { type: 'FINISH_ROUND_INTRO' }
@@ -161,6 +280,7 @@ export type GameAction =
   | { type: 'REVEAL_ANSWER' }
   | { type: 'HIDE_ANSWER' }
   | { type: 'NEW_QUESTION' }
+  | { type: 'ALLOW_FALLBACK_QUESTION' }
   | { type: 'CLAIM_CELL'; payload: { team: TeamId; cellId?: number } }
   | { type: 'CORRECT_CELL_OWNER'; payload: { cellId: number; owner: CellOwner } }
   | { type: 'UNDO_MOVE' }

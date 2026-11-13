@@ -8,6 +8,7 @@ import {
   Undo2,
   X,
   Home,
+  Database,
 } from 'lucide-react';
 import { CellOwner, FontFamilyId, RoomGameState, VisualThemeId } from '../types/game';
 
@@ -19,6 +20,7 @@ interface StudioMenuDrawerProps {
   onReplayRound: () => void;
   onNextRound: () => void;
   onReturnToTitle: () => void;
+  onOpenContentAdmin: () => void;
   onCorrectCellOwner: (cellId: number, owner: CellOwner) => void;
   onUpdateSettings: (partial: Partial<RoomGameState['settings']>) => void;
   onUpdateTeamNames: (team1Name: string, team2Name: string) => void;
@@ -32,6 +34,7 @@ export const StudioMenuDrawer: React.FC<StudioMenuDrawerProps> = ({
   onReplayRound,
   onNextRound,
   onReturnToTitle,
+  onOpenContentAdmin,
   onCorrectCellOwner,
   onUpdateSettings,
 }) => {
@@ -116,9 +119,21 @@ export const StudioMenuDrawer: React.FC<StudioMenuDrawerProps> = ({
                 className="p-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-400/30 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer"
               >
                 <Home className="w-4 h-4" />
-                <span>شاشة البداية</span>
+                <span>شاشة اختيار الفئات</span>
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenContentAdmin();
+              }}
+              className="w-full p-2.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border border-emerald-400/30 text-xs font-extrabold flex items-center justify-center gap-2 transition cursor-pointer"
+            >
+              <Database className="w-4 h-4 text-emerald-300" />
+              <span>لوحة إدارة بنك الأسئلة والمحتوى (JSON / CSV)</span>
+            </button>
           </div>
 
           {/* Customization Controls */}
