@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId, useState } from 'react';
 import { Check, Info } from 'lucide-react';
 import { SubCategoryDefinition } from '../types/game';
 
@@ -22,7 +22,7 @@ const ThemeSceneSvg: React.FC<{
   to: string;
   accent: string;
 }> = ({ theme, from, to, accent }) => {
-  const uid = `grad_${theme}`;
+  const uid = useId();
   return (
     <svg
       viewBox="0 0 240 310"
@@ -406,118 +406,69 @@ export const SubCategoryCardIllustration: React.FC<SubCategoryCardProps> = ({
   onToggleSelect,
   onOpenInfo,
 }) => {
-  const readinessPct = Math.min(100, Math.max(18, Math.round((questionCount / 15) * 100)));
   const imageSrc = customImageUrl || subCategory.customImageUrl;
+  const [failedImage, setFailedImage] = useState<string>();
+  const countLabel = questionCount === 0 ? 'لا أسئلة مطابقة' : `${questionCount} سؤال`;
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onToggleSelect}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onToggleSelect();
-        }
-      }}
-      data-testid={`subcat-card-${subCategory.id}`}
-      aria-pressed={selected}
-      className={`group relative rounded-[22px] p-1.5 transition-all duration-200 select-none cursor-pointer ${
-        selected
-          ? 'bg-white ring-4 ring-[#2563eb] shadow-[0_8px_0_#1e3a8a,0_14px_28px_rgba(0,0,0,0.5)] -translate-y-1'
-          : 'bg-slate-100/95 hover:bg-white shadow-[0_6px_0_#334155,0_10px_20px_rgba(0,0,0,0.38)] hover:-translate-y-0.5'
-      }`}
-    >
-      {/* Inner 2:3 Vertical Commercial Mobile Game Frame */}
-      <div className="relative w-full aspect-[2/3] rounded-[16px] overflow-hidden bg-slate-950 border-2 border-slate-900/40">
-        {imageSrc ? (
+    <div className={`group relative isolate rounded-2xl border bg-[#120b25] shadow-lg transition-colors ${
+      selected ? 'border-cyan-300' : 'border-white/15 hover:border-white/40'
+    }`}>
+      <button
+        type="button"
+        onClick={onToggleSelect}
+        data-testid={`subcat-card-${subCategory.id}`}
+        aria-label={`${subCategory.title}، ${countLabel}`}
+        aria-pressed={selected}
+        className="relative block aspect-[4/5] w-full overflow-hidden rounded-2xl text-start focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-cyan-300"
+      >
+        {imageSrc && imageSrc !== failedImage ? (
           <img
             src={imageSrc}
-            alt={subCategory.title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            alt=""
+            className="h-full w-full object-cover motion-safe:transition-transform motion-safe:duration-300 motion-safe:group-hover:scale-105"
             loading="lazy"
+            decoding="async"
+            onError={() => setFailedImage(imageSrc)}
           />
         ) : (
-          <div className="w-full h-full transition-transform duration-300 group-hover:scale-105">
-            <ThemeSceneSvg
-              theme={subCategory.artworkTheme}
-              from={subCategory.gradientFrom}
-              to={subCategory.gradientTo}
-              accent={subCategory.accentColor}
-            />
-          </div>
+          <ThemeSceneSvg
+            theme={subCategory.artworkTheme}
+            from={subCategory.gradientFrom}
+            to={subCategory.gradientTo}
+            accent={subCategory.accentColor}
+          />
         )}
 
-        {/* Multi-stop commercial contrast scrim for guaranteed Arabic title legibility */}
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              'linear-gradient(180deg, rgba(15,23,42,0.55) 0%, rgba(15,23,42,0.18) 28%, rgba(15,23,42,0.52) 55%, rgba(15,23,42,0.82) 100%)',
-          }}
-        />
-
-        {/* Top-Left Info Button (`i`) */}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenInfo(e);
-          }}
-          title={`معلومات الفئة: ${subCategory.title}`}
-          aria-label={`معلومات الفئة: ${subCategory.title}`}
-          data-testid={`subcat-info-${subCategory.id}`}
-          className="absolute top-2.5 left-2.5 z-20 w-7 h-7 rounded-full bg-white text-slate-950 border-2 border-slate-900 shadow-md flex items-center justify-center hover:scale-110 transition cursor-pointer"
-        >
-          <Info className="w-4 h-4 stroke-[2.75]" />
-        </button>
-
-        {/* Top-Right Question Count Pill */}
-        <div className="absolute top-2.5 right-2.5 z-10 px-2.5 py-0.5 rounded-full bg-slate-950/85 border border-white/30 text-[11px] font-black text-amber-300 tabular-nums shadow">
-          {questionCount} سؤال
-        </div>
-
-        {/* Center Outlined Programmatic Arabic Title Overlay */}
-        <div className="absolute inset-x-2 top-[24%] bottom-[26%] flex flex-col items-center justify-center text-center pointer-events-none px-1.5">
-          {subCategory.isShowcaseFeatured && (
-            <span className="mb-1 px-2 py-0.5 rounded-md bg-amber-400/95 text-slate-950 text-[9px] font-black tracking-wide shadow">
-              بطاقة فاخرة PRO
-            </span>
-          )}
-          <span
-            className="text-xl sm:text-2xl font-black leading-tight text-[#FFE135]"
-            style={{
-              paintOrder: 'stroke fill',
-              WebkitTextStroke: '3.5px #090d16',
-              textShadow:
-                '0 3px 0 #090d16, 0 6px 14px rgba(0,0,0,0.85)',
-            }}
-          >
+        <span className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#100920] via-[#100920]/15 to-transparent" />
+        <span className="absolute inset-x-0 bottom-0 flex flex-col gap-1 px-2.5 pb-2.5 pt-6 sm:px-3 sm:pb-3">
+          <span className="text-[clamp(0.8rem,2vw,1rem)] font-black leading-snug text-white">
             {subCategory.title}
           </span>
-        </div>
+          <span className="text-[11px] font-bold text-white/80 tabular-nums">{countLabel}</span>
+        </span>
 
-        {/* Selected Blue Checkmark Badge (`✓`) */}
         {selected && (
-          <div
+          <span
+            aria-hidden="true"
             data-testid={`subcat-selected-badge-${subCategory.id}`}
-            className="absolute bottom-4 right-2.5 z-20 w-9 h-9 rounded-full bg-[#1d6ef5] border-[3px] border-slate-950 shadow-lg flex items-center justify-center text-white"
+            className="absolute start-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-cyan-300 text-slate-950 shadow"
           >
-            <Check className="w-5 h-5 stroke-[3.5]" />
-          </div>
+            <Check className="h-4 w-4 stroke-[3]" />
+          </span>
         )}
+      </button>
 
-        {/* Bottom Green Availability Bar */}
-        <div className="absolute bottom-1.5 inset-x-2.5 h-2 rounded-full bg-slate-950/90 border border-slate-900 overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${
-              questionCount >= 5 ? 'bg-[#22c55e]' : 'bg-amber-400'
-            }`}
-            style={{ width: `${readinessPct}%` }}
-          />
-        </div>
-      </div>
+      <button
+        type="button"
+        onClick={onOpenInfo}
+        title={`معلومات الفئة: ${subCategory.title}`}
+        aria-label={`معلومات الفئة: ${subCategory.title}`}
+        data-testid={`subcat-info-${subCategory.id}`}
+        className="absolute end-2 top-2 grid h-8 w-8 place-items-center rounded-full border border-white/25 bg-[#100920]/80 text-white hover:bg-[#100920] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300"
+      >
+        <Info className="h-4 w-4" />
+      </button>
     </div>
   );
 };
-

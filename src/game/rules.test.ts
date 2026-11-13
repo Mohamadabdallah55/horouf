@@ -12,6 +12,7 @@ import { checkTeamWin, evaluateBoardWinner } from './winDetector';
 import {
   ALL_CATEGORIES,
   getEffectiveDifficultyForAge,
+  getFilteredQuestions,
   getLetterCoverageMatrix,
   getQuestionsByLetter,
   QUESTION_BANK,
@@ -250,6 +251,35 @@ test('Question selection does not repeat questions in a match and handles exhaus
   const afterAllUsed = pickQuestionForLetter(letter, usedIds);
   assert.equal(afterAllUsed.exhausted, true);
   assert.equal(afterAllUsed.question, null);
+});
+
+test('Round boards use the selected question pool without assigning an unplayable letter when enough questions exist', () => {
+  const filters = {
+    selectedSubCategories: ['kids_mosque_quiz'],
+    ageGroup: 'kids_6_9',
+    difficultyFilter: 'easy',
+  } as const;
+  const settings = { ...filters, selectedSubCategories: [...filters.selectedSubCategories] };
+  let state = applyGameAction(createInitialRoomState(), { type: 'START_MATCH', payload: settings });
+
+  const assertBoardCanBePlayed = () => {
+    const used = new Set(state.usedQuestionIds);
+    const questions = getFilteredQuestions(settings).filter((question) => !used.has(question.id));
+    for (const { letter } of state.cells) {
+      const index = questions.findIndex((question) => question.letter === letter);
+      assert.notEqual(index, -1, `No unused question for ${letter}`);
+      questions.splice(index, 1);
+    }
+    assert.equal(state.cells.length, TOTAL_CELLS);
+  };
+
+  assertBoardCanBePlayed();
+  state = applyGameAction(state, { type: 'SELECT_CELL', payload: { cellId: 0 } });
+  assert.equal(state.usedQuestionIds.length, 1);
+  for (const type of ['SHUFFLE_BOARD', 'REPLAY_ROUND', 'NEXT_ROUND'] as const) {
+    state = applyGameAction(state, { type });
+    assertBoardCanBePlayed();
+  }
 });
 
 test('Game flow: selecting cell, revealing answer, changing question, claiming cell, and undo', () => {

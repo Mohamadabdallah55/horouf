@@ -5,10 +5,13 @@ import {
   QuestionItem,
 } from '../types/game';
 import { ALL_ARABIC_LETTERS } from '../game/hexMath';
+import { BRAAM_QUESTIONS } from './braamQuestions';
+import { ELITE_PLUS_QUESTIONS } from './elitePlusQuestions';
 import {
   EXTRA_VERIFIED_QUESTIONS,
   enrichLegacyQuestion,
 } from './expandedQuestions';
+import { HOROUF_V3_QUESTIONS } from './horoufV3Questions';
 import { SPORTS_VERIFIED_PACK_150 } from './sportsQuestionsPack';
 
 export const ALL_CATEGORIES: QuestionCategory[] = [
@@ -474,13 +477,13 @@ const SPORTS_PACK_NORMALIZED: QuestionItem[] = SPORTS_VERIFIED_PACK_150.map(
   })
 );
 
-/**
- * Build the flat, indexed QuestionItem array (525+ verified questions across 28 letters, 16 main categories, 37 subcategories, and 150+ verified sports items).
- */
 export const QUESTION_BANK: QuestionItem[] = [
+  ...BRAAM_QUESTIONS,
+  ...HOROUF_V3_QUESTIONS,
   ...EXTRA_ENRICHED_QUESTIONS,
   ...SPORTS_PACK_NORMALIZED,
   ...BASE_ENRICHED_QUESTIONS,
+  ...ELITE_PLUS_QUESTIONS,
 ];
 
 let customQuestionsRuntime: QuestionItem[] = [];

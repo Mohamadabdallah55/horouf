@@ -18,6 +18,7 @@ import {
 import {
   AGE_GROUP_OPTIONS,
   ALL_SUBCATEGORIES,
+  DIFFICULTY_OPTIONS,
   MAIN_CATEGORIES_CATALOG,
 } from '../data/categoriesCatalog';
 import {
@@ -56,6 +57,23 @@ interface ContentAdminModalProps {
 
 type AdminTab = 'questions' | 'import_export' | 'cards_media' | 'history_stats' | 'audio';
 
+const QUESTIONS_PER_PAGE = 60;
+const subCategoryOrder = new Map(ALL_SUBCATEGORIES.map(({ id }, index) => [id, index]));
+const letterOrder = new Map(ARABIC_ALPHABET.map((letter, index) => [letter, index]));
+const difficultyOrder = new Map(DIFFICULTY_OPTIONS.map(({ id }, index) => [id, index]));
+
+function compareQuestions(a: QuestionItem, b: QuestionItem): number {
+  const aSubCategory = subCategoryOrder.get(a.subCategory ?? '') ?? ALL_SUBCATEGORIES.length;
+  const bSubCategory = subCategoryOrder.get(b.subCategory ?? '') ?? ALL_SUBCATEGORIES.length;
+  const aLetter = letterOrder.get(normalizeGameLetter(a.letter)) ?? ARABIC_ALPHABET.length;
+  const bLetter = letterOrder.get(normalizeGameLetter(b.letter)) ?? ARABIC_ALPHABET.length;
+  const aDifficulty = difficultyOrder.get(a.difficulty ?? 'medium') ?? DIFFICULTY_OPTIONS.length;
+  const bDifficulty = difficultyOrder.get(b.difficulty ?? 'medium') ?? DIFFICULTY_OPTIONS.length;
+  return aSubCategory - bSubCategory ||
+    aLetter - bLetter ||
+    aDifficulty - bDifficulty;
+}
+
 export const ContentAdminModal: React.FC<ContentAdminModalProps> = ({
   onClose,
   matchHistory,
@@ -70,6 +88,8 @@ export const ContentAdminModal: React.FC<ContentAdminModalProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [letterFilter, setLetterFilter] = useState<string>('all');
   const [mainCatFilter, setMainCatFilter] = useState<string>('all');
+  const [difficultyFilter, setDifficultyFilter] = useState<DifficultyLevel | 'all'>('all');
+  const [questionPage, setQuestionPage] = useState(0);
 
   // Add / Edit Question Form State
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -123,6 +143,9 @@ export const ContentAdminModal: React.FC<ContentAdminModalProps> = ({
       if (mainCatFilter !== 'all' && q.mainCategory !== mainCatFilter) {
         return false;
       }
+      if (difficultyFilter !== 'all' && (q.difficulty ?? 'medium') !== difficultyFilter) {
+        return false;
+      }
       if (searchQuery.trim()) {
         const s = searchQuery.trim();
         if (!q.question.includes(s) && !q.answer.includes(s)) {
@@ -130,8 +153,13 @@ export const ContentAdminModal: React.FC<ContentAdminModalProps> = ({
         }
       }
       return true;
-    });
-  }, [allQuestions, letterFilter, mainCatFilter, searchQuery]);
+    }).sort(compareQuestions);
+  }, [allQuestions, letterFilter, mainCatFilter, difficultyFilter, searchQuery]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredQuestions.length / QUESTIONS_PER_PAGE));
+  const currentPage = Math.min(questionPage, pageCount - 1);
+  const pageStart = currentPage * QUESTIONS_PER_PAGE;
+  const visibleQuestions = filteredQuestions.slice(pageStart, pageStart + QUESTIONS_PER_PAGE);
 
   // Live validation of the Add/Edit Question form
   const liveLetterValidation = useMemo(() => {
@@ -656,21 +684,28 @@ export const ContentAdminModal: React.FC<ContentAdminModalProps> = ({
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
                     <div className="relative">
                       <Search className="w-4 h-4 text-white/45 absolute right-3 top-2.5" />
                       <input
                         type="text"
                         value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          setQuestionPage(0);
+                        }}
                         placeholder="ابحث في نص السؤال أو الجواب..."
                         className="w-full rounded-xl bg-[#140824] border border-white/20 pr-9 pl-3 py-1.5 text-xs font-bold text-white"
                       />
                     </div>
 
                     <select
+                      aria-label="تصفية حسب الحرف"
                       value={letterFilter}
-                      onChange={(e) => setLetterFilter(e.target.value)}
+                      onChange={(e) => {
+                        setLetterFilter(e.target.value);
+                        setQuestionPage(0);
+                      }}
                       className="rounded-xl bg-[#140824] border border-white/20 px-3 py-1.5 text-xs font-bold text-white"
                     >
                       <option value="all">جميع الحروف (28 حرفًا)</option>
@@ -682,8 +717,12 @@ export const ContentAdminModal: React.FC<ContentAdminModalProps> = ({
                     </select>
 
                     <select
+                      aria-label="تصفية حسب الفئة"
                       value={mainCatFilter}
-                      onChange={(e) => setMainCatFilter(e.target.value)}
+                      onChange={(e) => {
+                        setMainCatFilter(e.target.value);
+                        setQuestionPage(0);
+                      }}
                       className="rounded-xl bg-[#140824] border border-white/20 px-3 py-1.5 text-xs font-bold text-white"
                     >
                       <option value="all">جميع الفئات الرئيسية (16)</option>
@@ -693,12 +732,26 @@ export const ContentAdminModal: React.FC<ContentAdminModalProps> = ({
                         </option>
                       ))}
                     </select>
+
+                    <select
+                      aria-label="تصفية حسب الصعوبة"
+                      value={difficultyFilter}
+                      onChange={(e) => {
+                        setDifficultyFilter(e.target.value as DifficultyLevel | 'all');
+                        setQuestionPage(0);
+                      }}
+                      className="rounded-xl bg-[#140824] border border-white/20 px-3 py-1.5 text-xs font-bold text-white"
+                    >
+                      {DIFFICULTY_OPTIONS.map(({ id, label }) => (
+                        <option key={id} value={id}>{label}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
                 {/* Questions List */}
-                <div className="space-y-2 max-h-[54vh] overflow-y-auto pr-1">
-                  {filteredQuestions.slice(0, 60).map((q) => (
+                <div key={currentPage} className="space-y-2 max-h-[54vh] overflow-y-auto pr-1">
+                  {visibleQuestions.map((q) => (
                     <div
                       key={q.id}
                       className="rounded-2xl bg-[#230E3B]/90 border border-white/10 p-3 flex items-start justify-between gap-3 hover:border-amber-400/40 transition"
@@ -720,13 +773,7 @@ export const ContentAdminModal: React.FC<ContentAdminModalProps> = ({
                                 q.category}
                             </span>
                             <span className="px-2 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 font-black">
-                              {q.difficulty === 'expert'
-                                ? 'خبير'
-                                : q.difficulty === 'hard'
-                                ? 'صعب'
-                                : q.difficulty === 'medium'
-                                ? 'متوسط'
-                                : 'سهل'}
+                              {DIFFICULTY_OPTIONS.find(({ id }) => id === (q.difficulty ?? 'medium'))?.label}
                             </span>
                             <span className="text-white/50">
                               المصدر: {q.source || 'موثق'} · الاستخدام: {q.usageCount || 0}
@@ -755,6 +802,27 @@ export const ContentAdminModal: React.FC<ContentAdminModalProps> = ({
                     </div>
                   ))}
                 </div>
+                {pageCount > 1 && (
+                  <nav aria-label="صفحات بنك الأسئلة" className="flex items-center justify-between gap-2 text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setQuestionPage(currentPage - 1)}
+                      disabled={currentPage === 0}
+                      className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-40"
+                    >
+                      السابق
+                    </button>
+                    <span>صفحة {currentPage + 1} من {pageCount}</span>
+                    <button
+                      type="button"
+                      onClick={() => setQuestionPage(currentPage + 1)}
+                      disabled={currentPage === pageCount - 1}
+                      className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-40"
+                    >
+                      التالي
+                    </button>
+                  </nav>
+                )}
               </div>
             </div>
           )}

@@ -102,7 +102,7 @@ export default function App() {
   const [menuDrawerOpen, setMenuDrawerOpen] = useState<boolean>(false);
   const [syncModalOpen, setSyncModalOpen] = useState<boolean>(false);
   const [contentAdminOpen, setContentAdminOpen] = useState<boolean>(false);
-  const [, setQuestionsBankVersion] = useState<number>(0);
+  const [questionsBankVersion, setQuestionsBankVersion] = useState(0);
 
   // Persisted Custom Card Images & Match History
   const [customCardImages, setCustomCardImages] = useState<Record<string, string>>(
@@ -502,21 +502,18 @@ export default function App() {
     if (role !== 'studio') return;
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      const isInput =
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.tagName === 'SELECT');
-      if (isInput) return;
+      if (e.defaultPrevented || target?.closest('input, textarea, select, [contenteditable="true"]')) return;
 
       if (
         gameState.phase === 'title' &&
         !contentAdminOpen &&
         !syncModalOpen &&
+        !document.querySelector('[aria-modal="true"]') &&
+        !target?.closest('button, a, [role="button"], [role="checkbox"]') &&
         (e.key === 'Enter' || e.key === ' ')
       ) {
         e.preventDefault();
-        dispatchAction({ type: 'START_MATCH' });
+        document.querySelector<HTMLButtonElement>('[data-start="true"]')?.click();
         return;
       }
 
@@ -624,6 +621,7 @@ export default function App() {
       {gameState.phase === 'title' && !isDisplayOnly && (
         <TitleAndSetupModal
           state={gameState}
+          questionsBankVersion={questionsBankVersion}
           customCardImages={customCardImages}
           onStartMatch={(cfg) => {
             if (document.activeElement instanceof HTMLElement) {

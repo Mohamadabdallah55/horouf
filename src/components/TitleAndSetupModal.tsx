@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   BarChart3,
@@ -15,7 +15,6 @@ import {
   Search,
   SlidersHorizontal,
   Smartphone,
-  Sparkles,
   Trash2,
   Trophy,
   Tv,
@@ -32,10 +31,11 @@ import {
 } from '../data/categoriesCatalog';
 import {
   getActiveQuestionBank,
-  getEffectiveDifficultyForAge,
+  getFilteredQuestions,
   getLetterCoverageMatrix,
 } from '../data/questions';
 import { getRoundedHexPath } from '../game/hexMath';
+import { normalizeForComparison } from '../game/arabicNormalization';
 import {
   AgeGroupId,
   CategoryPreset,
@@ -51,6 +51,7 @@ import { SubCategoryCardIllustration } from './SubCategoryCardIllustration';
 
 interface TitleAndSetupModalProps {
   state: RoomGameState;
+  questionsBankVersion: number;
   customCardImages: Record<string, string>;
   onStartMatch: (config: {
     team1Name: string;
@@ -109,6 +110,7 @@ function loadSavedPresets(): CategoryPreset[] {
 
 export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
   state,
+  questionsBankVersion,
   customCardImages,
   onStartMatch,
   onOpenSyncModal,
@@ -148,10 +150,19 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
 
   // Side Drawer & Matrix Modals State (keeps original purple Title screen clean while putting PRO tools on the side)
   const [showCategoriesDrawer, setShowCategoriesDrawer] = useState<boolean>(false);
+  const categoryTrigger = useRef<HTMLButtonElement>(null);
+  const categorySearchInput = useRef<HTMLInputElement>(null);
   const [showLetterCoverageModal, setShowLetterCoverageModal] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
   const [activeInfoSub, setActiveInfoSub] = useState<SubCategoryDefinition | null>(null);
+
+  useEffect(() => {
+    if (!showCategoriesDrawer) return;
+    const trigger = categoryTrigger.current;
+    categorySearchInput.current?.focus({ preventScroll: true });
+    return () => trigger?.focus({ preventScroll: true });
+  }, [showCategoriesDrawer]);
 
   // Favorite presets
   const [customPresets, setCustomPresets] = useState<CategoryPreset[]>(() =>
@@ -160,7 +171,10 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
   const [newPresetName, setNewPresetName] = useState('');
   const [showSavePresetInput, setShowSavePresetInput] = useState(false);
 
-  const allQuestions = useMemo(() => getActiveQuestionBank(false), [state]);
+  const allQuestions = useMemo(
+    () => getActiveQuestionBank(),
+    [questionsBankVersion],
+  );
 
   // Question counts per subcategory respecting current ageGroup & difficultyFilter
   const subCategoryCounts = useMemo(() => {
@@ -168,18 +182,13 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
     for (const sub of ALL_SUBCATEGORIES) {
       map[sub.id] = 0;
     }
-    for (const q of allQuestions) {
-      if (q.status === 'draft') continue;
-      if (difficultyFilter !== 'all') {
-        const eff = getEffectiveDifficultyForAge(q, ageGroup);
-        if (eff !== difficultyFilter) continue;
-      }
+    for (const q of getFilteredQuestions({ ageGroup, difficultyFilter })) {
       if (q.subCategory && map[q.subCategory] !== undefined) {
         map[q.subCategory]++;
       }
     }
     return map;
-  }, [allQuestions, difficultyFilter, ageGroup]);
+  }, [questionsBankVersion, difficultyFilter, ageGroup]);
 
   // 28-letter coverage matrix for the currently selected categories, ageGroup, and difficultyFilter
   const coverageSummary = useMemo(() => {
@@ -190,7 +199,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
       ageGroup,
       difficultyFilter,
     });
-  }, [selectedSubIds, ageGroup, difficultyFilter, allQuestions]);
+  }, [selectedSubIds, ageGroup, difficultyFilter, questionsBankVersion]);
 
   // Featured 6 commercial showcase subcategories
   const featuredShowcaseSubs = useMemo(() => {
@@ -201,16 +210,16 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
 
   // Filter catalog by search query
   const filteredCatalog = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = normalizeForComparison(searchQuery);
     if (!q) return MAIN_CATEGORIES_CATALOG;
     return MAIN_CATEGORIES_CATALOG.map((cat) => {
       const catMatch =
-        cat.title.toLowerCase().includes(q) || cat.description.toLowerCase().includes(q);
+        normalizeForComparison(cat.title).includes(q) || normalizeForComparison(cat.description).includes(q);
       const matchingSubs = cat.subCategories.filter(
         (sub) =>
           catMatch ||
-          sub.title.toLowerCase().includes(q) ||
-          sub.description.toLowerCase().includes(q)
+          normalizeForComparison(sub.title).includes(q) ||
+          normalizeForComparison(sub.description).includes(q)
       );
       return {
         ...cat,
@@ -290,6 +299,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
 
   const handleStartGame = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (coverageSummary.totalMatchingQuestions === 0) return;
     const effectiveSubIds =
       selectedSubIds.length > 0
         ? selectedSubIds
@@ -327,7 +337,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
   return (
     <div
       dir="rtl"
-      className="fixed inset-0 z-50 bg-[#6A359C] flex flex-col justify-between overflow-y-auto overflow-x-hidden select-none"
+      className="fixed inset-0 z-50 bg-[radial-gradient(ellipse_at_75%_15%,#501d83,#221039_55%,#130a23)] flex flex-col justify-between overflow-y-auto overflow-x-hidden select-none"
     >
       {/* Decorative Floating White Hexagons on Left & Right Edges (Original ELITE CLASH Identity) */}
       <svg
@@ -391,113 +401,16 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
               <span>مكتبة ألعاب مسجد ابن تيمية · دوري ELITE CLASH</span>
             </div>
 
-            {/* Original 3D Stacked Cartoon Arabic Logo SVG */}
-            <div className="w-full max-w-[430px] drop-shadow-2xl">
-              <svg
-                viewBox="0 0 560 400"
-                className="w-full h-auto overflow-visible"
-                role="img"
-                aria-label="حروف النخبة — ELITE CLASH"
-              >
-                <g transform="rotate(-8 280 200)" style={{ paintOrder: 'stroke fill' }}>
-                  {/* Line 1: حروف (Yellow #FCE029 with deep 3D block shadow #311042) */}
-                  <text
-                    x="286"
-                    y="140"
-                    textAnchor="middle"
-                    fontFamily="Cairo, Alexandria, sans-serif"
-                    fontWeight="900"
-                    fontSize="126"
-                    fill="#311042"
-                    stroke="#311042"
-                    strokeWidth="24"
-                    strokeLinejoin="round"
-                    style={{ paintOrder: 'stroke fill' }}
-                  >
-                    حروف
-                  </text>
-                  <text
-                    x="270"
-                    y="124"
-                    textAnchor="middle"
-                    fontFamily="Cairo, Alexandria, sans-serif"
-                    fontWeight="900"
-                    fontSize="126"
-                    fill="#FCE029"
-                    stroke="#311042"
-                    strokeWidth="14"
-                    strokeLinejoin="round"
-                    style={{ paintOrder: 'stroke fill' }}
-                  >
-                    حروف
-                  </text>
-
-                  {/* Line 2: ELITE CLASH / مع (Cyan #3BC4E2 with 3D shadow) */}
-                  <text
-                    x="304"
-                    y="220"
-                    textAnchor="middle"
-                    fontFamily="Cairo, Alexandria, sans-serif"
-                    fontWeight="900"
-                    fontSize="56"
-                    fill="#311042"
-                    stroke="#311042"
-                    strokeWidth="16"
-                    strokeLinejoin="round"
-                    style={{ paintOrder: 'stroke fill' }}
-                  >
-                    ELITE CLASH
-                  </text>
-                  <text
-                    x="294"
-                    y="210"
-                    textAnchor="middle"
-                    fontFamily="Cairo, Alexandria, sans-serif"
-                    fontWeight="900"
-                    fontSize="56"
-                    fill="#3BC4E2"
-                    stroke="#311042"
-                    strokeWidth="10"
-                    strokeLinejoin="round"
-                    style={{ paintOrder: 'stroke fill' }}
-                  >
-                    ELITE CLASH
-                  </text>
-
-                  {/* Line 3: النخبة (Coral Red-Orange #F1563F with deep 3D shadow #311042) */}
-                  <text
-                    x="290"
-                    y="336"
-                    textAnchor="middle"
-                    fontFamily="Cairo, Alexandria, sans-serif"
-                    fontWeight="900"
-                    fontSize="118"
-                    fill="#311042"
-                    stroke="#311042"
-                    strokeWidth="24"
-                    strokeLinejoin="round"
-                    style={{ paintOrder: 'stroke fill' }}
-                  >
-                    النخبة
-                  </text>
-                  <text
-                    x="274"
-                    y="320"
-                    textAnchor="middle"
-                    fontFamily="Cairo, Alexandria, sans-serif"
-                    fontWeight="900"
-                    fontSize="118"
-                    fill="#F1563F"
-                    stroke="#311042"
-                    strokeWidth="14"
-                    strokeLinejoin="round"
-                    style={{ paintOrder: 'stroke fill' }}
-                  >
-                    النخبة
-                  </text>
-                </g>
-              </svg>
-            </div>
+            <h1 className="mb-3 w-[min(64vw,17rem)] lg:w-[clamp(15rem,25vw,21rem)]">
+              <img
+                src="/assets/brand/horouf-logo.jpg"
+                alt="حروف مع النخبة"
+                width={640}
+                height={640}
+                fetchPriority="high"
+                className="w-full rounded-[24%] shadow-[0_18px_65px_#8c31ff66]"
+              />
+            </h1>
 
             <p className="text-white/85 text-xs sm:text-sm font-semibold max-w-md mt-1">
               وصّل مسار فريقك عبر 25 خلية سداسية! الأخضر من الأعلى للأسفل، والبرتقالي من اليمين لليسار.
@@ -509,6 +422,9 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowCategoriesDrawer(true)}
+                ref={categoryTrigger}
+                aria-haspopup="dialog"
+                aria-expanded={showCategoriesDrawer}
                 data-testid="btn-open-categories-drawer"
                 className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-gradient-to-l from-[#311042]/90 via-[#250b36]/90 to-[#311042]/90 hover:from-[#3d1452] hover:to-[#311042] text-white border-2 border-amber-400/70 shadow-xl transition cursor-pointer group"
               >
@@ -518,10 +434,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-black text-amber-300 flex items-center gap-1.5">
-                      <span>مكتبة الفئات والبطاقات المصورة PRO</span>
-                      <span className="px-2 py-0.5 rounded-full bg-amber-400/20 border border-amber-400/40 text-[10px] text-amber-200">
-                        6 بطاقات فاخرة
-                      </span>
+                      <span>مكتبة الفئات</span>
                     </div>
                     <div className="text-[11px] text-white/75 font-bold">
                       محدد حاليًا: {selectedSubIds.length} فئة فرعية • {coverageSummary.totalMatchingQuestions} سؤال مطابق
@@ -688,7 +601,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-xs font-extrabold text-cyan-300">
-                      مستوى الصعوبة (مع منع النزول الصامت للسهل):
+                      مستوى الصعوبة
                     </span>
                     <span
                       data-testid="matching-questions-badge"
@@ -704,6 +617,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                         type="button"
                         data-testid={`difficulty-${diff.id}`}
                         onClick={() => setDifficultyFilter(diff.id)}
+                        aria-pressed={difficultyFilter === diff.id}
                         title={diff.description}
                         className={`py-1.5 px-1.5 rounded-xl text-xs font-black transition cursor-pointer ${
                           difficultyFilter === diff.id
@@ -724,7 +638,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                 {/* Age Group Selector */}
                 <div>
                   <span className="block text-[11px] font-extrabold text-amber-300 mb-1.5">
-                    الفئة العمرية (تُعاير صعوبة السؤال تلقائيًا حسب العمر):
+                    الفئة العمرية
                   </span>
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                     {AGE_GROUP_OPTIONS.map((ag) => (
@@ -733,6 +647,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                         type="button"
                         data-testid={`age-group-${ag.id}`}
                         onClick={() => setAgeGroup(ag.id)}
+                        aria-pressed={ageGroup === ag.id}
                         title={ag.description}
                         className={`px-1.5 py-1.5 rounded-xl text-[11px] font-black transition cursor-pointer truncate ${
                           ageGroup === ag.id
@@ -747,19 +662,17 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                 </div>
 
                 {/* Transparent Shortage Warning if selected difficulty/categories has missing letters */}
-                {!coverageSummary.isFullyCovered && (
+                {coverageSummary.totalMatchingQuestions < 25 && (
                   <div
                     data-testid="setup-difficulty-shortage-warning"
                     className="rounded-xl bg-amber-500/20 border border-amber-400/50 px-3 py-2 text-[11px] text-amber-200 flex items-start gap-2"
                   >
                     <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
                     <div className="flex-1">
-                      <span className="font-black text-amber-300">
-                        تنبيه شفافية المحتوى:{' '}
-                      </span>
                       <span>
-                        يوجد نقص في ({coverageSummary.lettersWithZeroQuestions.length}) حرفًا لهذا المستوى المحدد ({coverageSummary.lettersWithZeroQuestions.slice(0, 8).join('، ')}
-                        {coverageSummary.lettersWithZeroQuestions.length > 8 ? '...' : ''}). لن يختار النظام سؤالًا أسهل بصمت، بل سينبه المقدم عند اختيار الحرف.
+                        {coverageSummary.totalMatchingQuestions === 0
+                          ? 'لا توجد أسئلة مطابقة. غيّر الفئات أو مستوى الصعوبة لبدء المباراة.'
+                          : 'اللوحة فيها 25 خلية. أضف فئات أو وسّع مستوى الصعوبة لتوفّر سؤالًا لكل خلية.'}
                       </span>
                     </div>
                   </div>
@@ -859,7 +772,8 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                 type="submit"
                 data-start="true"
                 data-testid="btn-start-match"
-                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-l from-amber-400 via-yellow-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-slate-950 font-black text-lg shadow-xl shadow-black/30 flex items-center justify-center gap-2 transition transform active:scale-[0.99] cursor-pointer"
+                disabled={coverageSummary.totalMatchingQuestions === 0}
+                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-l from-amber-400 via-yellow-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-slate-950 font-black text-lg shadow-xl shadow-black/30 flex items-center justify-center gap-2 transition transform active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Play className="w-5 h-5 fill-current" />
                 <span>ابدأ المسابقة الآن</span>
@@ -889,6 +803,15 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
         >
           <div
             data-testid="categories-side-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="category-library-title"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                setShowCategoriesDrawer(false);
+              }
+            }}
             className="w-full max-w-5xl h-full bg-gradient-to-b from-[#1E295E] via-[#17204A] to-[#0F1636] border-r-2 border-white/20 flex flex-col overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
@@ -899,8 +822,8 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                   <Grid className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-base sm:text-xl font-black text-white">
-                    مكتبة الفئات والبطاقات المصورة — حروف النخبة PRO
+                  <h2 id="category-library-title" className="text-base sm:text-xl font-black text-white">
+                    مكتبة الفئات
                   </h2>
                   <p className="text-xs text-white/70 font-bold">
                     محدد: {selectedSubIds.length} فئة فرعية • {coverageSummary.totalMatchingQuestions} سؤال مطابق للمستوى والعمر
@@ -932,20 +855,14 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
             {/* Drawer Scrollable Body */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
               {/* 1. Featured 6 High-Craft Commercial Game Cards Section */}
-              <section
-                aria-label="البطاقات الـ 6 البارزة"
+              {!searchQuery.trim() && <section
+                aria-label="فئات مختارة"
                 data-testid="featured-showcase-6-section"
                 className="rounded-3xl bg-gradient-to-b from-[#26357A]/90 to-[#182252]/95 border-2 border-amber-400/50 p-4 sm:p-5 shadow-2xl space-y-4"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <div className="inline-flex items-center gap-1.5 text-amber-300 text-xs font-black">
-                      <Sparkles className="w-4 h-4" />
-                      <span>البطاقات المصورة الفاخرة (6 فئات نموذجية بجودة ألعاب الهواتف التجارية)</span>
-                    </div>
-                    <h3 className="text-base sm:text-lg font-black text-white mt-0.5">
-                      كرة القدم • الفلك والفضاء • الأردن • الكيمياء • التاريخ الإسلامي • ألعاب الفيديو
-                    </h3>
+                    <h3 className="text-base sm:text-lg font-black text-white">فئات مختارة</h3>
                   </div>
 
                   <button
@@ -954,7 +871,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                     data-testid="btn-select-showcase-6"
                     className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow cursor-pointer transition"
                   >
-                    تحديد البطاقات الـ 6 الفاخرة فقط
+                    تحديد هذه الفئات
                   </button>
                 </div>
 
@@ -974,7 +891,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                     />
                   ))}
                 </div>
-              </section>
+              </section>}
 
               {/* 2. Search, Bulk Select & Ready Presets Toolbar */}
               <section
@@ -982,12 +899,14 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                 className="rounded-3xl bg-[#161F4E]/95 border-2 border-white/15 p-4 shadow-xl space-y-3"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="relative flex-1 min-w-[230px]">
+                  <div className="relative w-full flex-1 basis-56">
                     <Search className="w-4 h-4 text-white/60 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
+                      ref={categorySearchInput}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
+                      aria-label="البحث في الفئات"
                       data-testid="category-search-input"
                       placeholder="ابحث عن فئة رئيسية أو موضوع فرعي (مثل: القرآن، الأردن، كرة قدم، الكيمياء...)"
                       className="w-full rounded-2xl bg-[#0E1538] border border-white/20 pr-10 pl-4 py-2.5 text-sm font-bold text-white placeholder:text-white/50 focus:outline-none focus:border-amber-400"
@@ -996,6 +915,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                       <button
                         type="button"
                         onClick={() => setSearchQuery('')}
+                        aria-label="مسح البحث"
                         className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white cursor-pointer"
                       >
                         <X className="w-4 h-4" />
@@ -1098,6 +1018,11 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
 
               {/* 3. Full 16 Main Category Sections */}
               <div className="space-y-6" data-testid="categories-library-sections">
+                {filteredCatalog.length === 0 && (
+                  <p className="rounded-xl border border-white/10 p-4 text-sm text-white/75">
+                    ما في فئات تطابق البحث.
+                  </p>
+                )}
                 {filteredCatalog.map((mainCat) => {
                   const subIds = mainCat.subCategories.map((s) => s.id);
                   const selectedInCatCount = subIds.filter((id) =>
@@ -1128,6 +1053,8 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                             type="button"
                             onClick={() => toggleMainCategoryAll(mainCat.id)}
                             data-testid={`toggle-main-cat-${mainCat.id}`}
+                            aria-label={`تحديد جميع فئات ${mainCat.title}`}
+                            aria-pressed={allInCatSelected}
                             className={`w-10 h-10 rounded-xl border-2 border-[#181E2C] flex items-center justify-center font-black transition cursor-pointer shadow ${
                               allInCatSelected
                                 ? 'bg-[#1D9BF0] text-white'
@@ -1155,7 +1082,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                             dir="ltr"
                             className="px-3 py-1 rounded-full bg-[#242C3D] border border-white/10 text-xs font-black text-white/90 tabular-nums"
                           >
-                            {mainCat.subCategories.length} / {selectedInCatCount}
+                            {selectedInCatCount} / {mainCat.subCategories.length}
                           </span>
 
                           <button
@@ -1167,6 +1094,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                               }))
                             }
                             aria-label={`طي أو فتح قسم ${mainCat.title}`}
+                            aria-expanded={!isCollapsed}
                             className="w-9 h-9 rounded-xl bg-[#242C3D] hover:bg-[#1B2230] border border-white/15 flex items-center justify-center text-white cursor-pointer transition"
                           >
                             {isCollapsed ? (

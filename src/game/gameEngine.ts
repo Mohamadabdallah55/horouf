@@ -1,7 +1,9 @@
 import {
   ALL_CATEGORIES,
+  getFilteredQuestions,
   getQuestionsByLetter,
   incrementQuestionUsage,
+  normalizeArabicLetter,
   QuestionFilterOptions,
 } from '../data/questions';
 import { ALL_SUBCATEGORY_IDS } from '../data/categoriesCatalog';
@@ -13,7 +15,7 @@ import {
   RoomGameState,
   TeamId,
 } from '../types/game';
-import { createBoardCells, TOTAL_CELLS } from './hexMath';
+import { ALL_ARABIC_LETTERS, createBoardCells, TOTAL_CELLS } from './hexMath';
 import { evaluateBoardWinner } from './winDetector';
 
 export const ROUND_NAMES_AR: Record<number, string> = {
@@ -28,6 +30,53 @@ export const ROUND_NAMES_AR: Record<number, string> = {
 
 export function getArabicRoundTitle(roundNumber: number): string {
   return ROUND_NAMES_AR[roundNumber] || `الجولة ${roundNumber}`;
+}
+
+function createRoundBoard(state: RoomGameState, shuffle: boolean) {
+  const { selectedCategories, selectedSubCategories, ageGroup, difficultyFilter } = state.settings;
+  const usedIds = new Set(state.usedQuestionIds);
+  const availableByLetter = new Map<string, number>();
+  for (const question of getFilteredQuestions({
+    allowedCategories: selectedCategories,
+    selectedSubCategories,
+    ageGroup,
+    difficultyFilter,
+  })) {
+    if (usedIds.has(question.id)) continue;
+    const letter = normalizeArabicLetter(question.letter);
+    availableByLetter.set(letter, (availableByLetter.get(letter) ?? 0) + 1);
+  }
+
+  const board = createBoardCells(shuffle);
+  const boardLetters = board.map(({ letter }) => letter);
+  const preferredLetters = [...new Set([...boardLetters, ...ALL_ARABIC_LETTERS])];
+  const missingSlots: number[] = [];
+  for (const [index, letter] of boardLetters.entries()) {
+    const count = availableByLetter.get(letter) ?? 0;
+    if (count === 0) missingSlots.push(index);
+    else availableByLetter.set(letter, count - 1);
+  }
+
+  // Use unused letters before repeating one, and never assign more cells than its question pool.
+  const replacements = preferredLetters.filter(
+    (letter) => !boardLetters.includes(letter) && (availableByLetter.get(letter) ?? 0) > 0,
+  );
+  for (const letter of replacements) {
+    availableByLetter.set(letter, availableByLetter.get(letter)! - 1);
+  }
+  while (replacements.length < missingSlots.length) {
+    const eligible = preferredLetters.filter((letter) => (availableByLetter.get(letter) ?? 0) > 0);
+    if (!eligible.length) break;
+    for (const letter of eligible) {
+      replacements.push(letter);
+      availableByLetter.set(letter, availableByLetter.get(letter)! - 1);
+      if (replacements.length === missingSlots.length) break;
+    }
+  }
+  replacements.slice(0, missingSlots.length).forEach((letter, i) => {
+    board[missingSlots[i]].letter = letter;
+  });
+  return board;
 }
 
 export function createBuzzerState(
@@ -270,7 +319,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       next.roundHistory = [];
       next.moveHistory = [];
       next.usedQuestionIds = [];
-      next.cells = createBoardCells(false);
+      next.cells = createRoundBoard(next, false);
       next.selectedCellId = null;
       next.currentQuestion = null;
       next.questionExhaustedForLetter = false;
@@ -672,7 +721,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
     }
 
     case 'SHUFFLE_BOARD': {
-      next.cells = createBoardCells(true);
+      next.cells = createRoundBoard(next, true);
       next.selectedCellId = null;
       next.currentQuestion = null;
       next.questionExhaustedForLetter = false;
@@ -705,7 +754,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
         }
       }
 
-      next.cells = createBoardCells(true);
+      next.cells = createRoundBoard(next, true);
       next.selectedCellId = null;
       next.currentQuestion = null;
       next.questionExhaustedForLetter = false;
@@ -727,7 +776,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
 
     case 'NEXT_ROUND': {
       next.currentRound = state.currentRound + 1;
-      next.cells = createBoardCells(true);
+      next.cells = createRoundBoard(next, true);
       next.selectedCellId = null;
       next.currentQuestion = null;
       next.questionExhaustedForLetter = false;
