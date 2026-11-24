@@ -637,7 +637,7 @@ export default function App() {
 
       {/* Left 68% Arena: 25-Hexagon Board */}
       <section
-        className="hr-arena w-full md:w-[64%] lg:w-[68%] h-[52%] md:h-full relative overflow-hidden"
+        className="hr-arena w-full md:w-[66%] lg:w-[72%] h-[53%] md:h-full relative overflow-hidden"
         aria-label="ساحة اللوحة السداسية"
       >
         <HexBoard
@@ -681,7 +681,7 @@ export default function App() {
       </section>
 
       {/* Right 32% Panel: Question Box, Buzzer Controls, Answer Reveal, and Team Claim Bars */}
-      <section className="hr-side w-full md:w-[36%] lg:w-[32%] h-[48%] md:h-full relative z-10">
+      <section className="hr-side w-full md:w-[34%] lg:w-[28%] h-[47%] md:h-full relative z-10">
         <SideControlPanel
           state={gameState}
           presence={presence}

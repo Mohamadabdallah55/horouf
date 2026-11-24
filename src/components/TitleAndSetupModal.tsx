@@ -401,9 +401,9 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
 
       {/* Main Content Container: Classic 2-Column Split (Right: 3D Emblem & Side PRO Tools | Left: Match & Team Setup Card) */}
       <div className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
-        <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+        <div className="hr-home-grid w-full max-w-[1500px] mx-auto">
           {/* Right Column (6 cols): Original 3D Tilted Title Emblem + Side PRO Feature Triggers */}
-          <div className="lg:col-span-6 flex flex-col items-center justify-center text-center">
+          <div className="hr-hero-area flex flex-col items-center justify-center text-center">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#311042]/65 border border-white/20 text-amber-300 text-xs sm:text-sm font-extrabold mb-3 shadow-lg">
               <Trophy className="w-4 h-4" />
               <span>ساحة ألعاب حروف النخبة</span>
@@ -426,9 +426,9 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
               <p>جاوب صح، امتلك الحرف، ووصّل طرفي اللوحة قبل خصمك.</p>
             </div>
             <div className="hr-preview" aria-hidden="true">
-              <svg viewBox="0 0 410 168" className="hr-preview-svg">
-                {['ح','ر','و','ف','ن','خ','ب','ة','س','م','ع','ك','ل','ق','ت'].map((letter,i)=>{
-                  const row=Math.floor(i/5),col=i%5,cx=51+col*70+(row%2)*35,cy=32+row*51;
+              <svg viewBox="0 0 410 280" className="hr-preview-svg">
+                {['ح','ر','و','ف','ن','خ','ب','ة','س','م','ع','ك','ل','ق','ت','أ','ج','د','ز','ش','ص','ط','ظ','غ','ي'].map((letter,i)=>{
+                  const row=Math.floor(i/5),col=i%5,cx=51+col*70+(row%2)*35,cy=38+row*51;
                   const color=col===1 ? team1Color : row===1&&col>=2 ? team2Color : '#fff2d6';
                   return <g key={i}><path d={getRoundedHexPath(cx,cy,38,4)} fill="#190f2b" transform="translate(0 3)"/><path d={getRoundedHexPath(cx,cy,36,4)} fill={color} stroke="#21132d" strokeWidth="2"/><text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="#251435" fontSize="26" fontWeight="900">{letter}</text></g>;
                 })}
@@ -436,6 +436,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
               <div className="hr-preview-legend"><span><i style={{background:team1Color}}/> أعلى ↕ أسفل</span><span><i style={{background:team2Color}}/> يمين ↔ يسار</span></div>
             </div>
 
+            <div className="hr-home-stats"><div><b>{allQuestions.length.toLocaleString('en-US')}</b><span>سؤال بالبنك</span></div><div><b>{selectedSubIds.length}</b><span>فئة محددة</span></div><div><b>25</b><span>خلية باللوحة</span></div></div>
             {/* Side PRO Action Buttons Dock (Categories Drawer, 28-Letter Coverage, Question Bank Admin, Buzzer, Display Mode) */}
             <div className="mt-4 w-full max-w-md space-y-2.5">
               {/* Primary Side PRO Trigger: Open Category Cards & 6 Illustrated Showcase Drawer */}
@@ -475,7 +476,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                   className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow-lg transition cursor-pointer"
                 >
                   <Smartphone className="w-4 h-4 shrink-0" />
-                  <span>الجرس ({state.roomCode})</span>
+                  <span>{answerMode==='electronic'?'الجرس':'ربط الأجهزة'}</span>
                 </button>
 
                 <button
@@ -510,11 +511,22 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
             </div>
           </div>
 
+          <aside className="hr-mode-area text-white">
+            <div className="hr-mode-card">
+              <h2>نظام الإجابة</h2>
+              <div className="hr-mode-options" role="radiogroup" aria-label="نظام الإجابة">
+                {([{id:'manual',symbol:'✋',label:'بدون جرس',desc:'المقدم يحدد الأسرع'},{id:'electronic',symbol:'🔔',label:'جرس إلكتروني',desc:'الأسرع بالضغط'},{id:'turns',symbol:'↔',label:'تناوب الأدوار',desc:'صاحب الحرف أولًا'}] as const).map(mode=><label key={mode.id} className="hr-mode-option" data-active={answerMode===mode.id}><input form="hr-match-form" type="radio" name="answer-mode" value={mode.id} checked={answerMode===mode.id} onChange={()=>setAnswerMode(mode.id)}/><span className="hr-mode-icon" aria-hidden="true">{mode.symbol}</span><span><b>{mode.label}</b><small>{mode.desc}</small></span></label>)}
+              </div>
+              <div className="hr-start-team"><label htmlFor="hr-first-team">أول اختيار</label><select id="hr-first-team" value={startingTeam} onChange={e=>setStartingTeam(e.target.value as TeamId)}><option value="team1">{team1Name||'الفريق الأول'}</option><option value="team2">{team2Name||'الفريق الثاني'}</option></select><button type="button" onClick={()=>setStartingTeam(Math.random()<0.5?'team1':'team2')}>قرعة</button></div>
+            </div>
+            <div className="hr-mode-card hr-rules-mini"><h2>طريقة الفوز</h2><p><i style={{background:team1Color}}/> {team1Name||'الفريق الأول'} · أعلى ↕ أسفل</p><p><i style={{background:team2Color}}/> {team2Name||'الفريق الثاني'} · يمين ↔ يسار</p><small>الفريق اللي بجاوب صح بختار الحرف التالي.</small></div>
+            <div className="hr-mode-card"><h2>المباراة جاهزة؟</h2><p className="text-xs text-white/70">الجولات: {totalRounds} · {timerSeconds?timerSeconds+' ثانية':'بدون مؤقت'}</p><button className="hr-side-start" type="submit" form="hr-match-form" disabled={coverageSummary.totalMatchingQuestions===0}>ابدأ اللعب <Play size={15}/></button></div>
+          </aside>
           {/* Left Column (6 cols): Classic Match & Team Configuration Card + Difficulty & Age Controls */}
-          <div className="lg:col-span-6">
+          <div className="hr-settings-area">
             <form
               onSubmit={handleStartGame}
-              className="hr-setup rounded-3xl p-4 sm:p-6 text-white space-y-4"
+              id="hr-match-form" className="hr-setup rounded-3xl p-4 sm:p-5 text-white space-y-3"
             >
               <div className="flex items-center justify-between border-b border-white/15 pb-3">
                 <h2 className="text-lg sm:text-xl font-black text-white">
@@ -525,11 +537,6 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                 </span>
               </div>
 
-              <fieldset className="rounded-2xl border border-white/20 bg-[#21132e] p-3 space-y-2">
-                <legend className="px-2 text-sm font-black text-amber-300">نظام الإجابة</legend>
-                {([{id:'manual',label:'بدون جرس',desc:'المقدم يحدد الأسرع بالإجابة أو رفع اليد.'},{id:'electronic',label:'جرس إلكتروني',desc:'أول جهاز يضغط يأخذ فرصة الإجابة.'},{id:'turns',label:'تناوب الأدوار',desc:'صاحب اختيار الحرف يجيب أولًا، ثم الخصم عند الخطأ.'}] as const).map(mode=><label key={mode.id} className={`flex items-center gap-3 rounded-xl border p-2.5 cursor-pointer ${answerMode===mode.id?'bg-amber-400/15 border-amber-400':'bg-white/5 border-white/10'}`}><input type="radio" name="answer-mode" checked={answerMode===mode.id} onChange={()=>setAnswerMode(mode.id)} className="accent-amber-400"/><span><b className="block text-sm">{mode.label}</b><small className="block text-white/75 text-xs">{mode.desc}</small></span></label>)}
-                <div className="flex flex-wrap items-center gap-2 text-xs"><span className="font-bold">مين بختار أول حرف؟</span><select value={startingTeam} onChange={e=>setStartingTeam(e.target.value as TeamId)} className="rounded-lg bg-[#301c43] border border-white/20 p-2"><option value="team1">{team1Name||'الفريق الأول'}</option><option value="team2">{team2Name||'الفريق الثاني'}</option></select><button type="button" onClick={()=>setStartingTeam(Math.random()<0.5?'team1':'team2')} className="rounded-lg px-3 py-2 bg-amber-400 text-slate-950 font-black">قرعة</button></div>
-              </fieldset>
               {/* Team 1 & Team 2 Config */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {/* Team 1 (Green - Top to Bottom) */}
