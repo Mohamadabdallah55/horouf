@@ -143,6 +143,7 @@ export interface MoveRecord {
   cellId: number;
   letter: string;
   previousOwner: CellOwner;
+  previousChoosingTeam?: TeamId;
   newOwner: CellOwner;
   description: string;
 }
@@ -159,7 +160,9 @@ export interface TeamConfig {
   roundsWon: number;
 }
 
+export type AnswerMode = 'manual' | 'electronic' | 'turns';
 export interface GameSettings {
+  answerMode: AnswerMode;
   totalRounds: number; // 1, 3, 5, 7
   timerSeconds: number; // 0 = disabled, or 15, 30, 45, 60
   answerTimerSeconds: number; // Countdown after buzzing in, default 10s
@@ -227,6 +230,8 @@ export interface RoomGameState {
   version: number;
   phase: GamePhase;
   currentRound: number;
+  choosingTeam: TeamId;
+  roundStartingTeam: TeamId;
   cells: HexCell[];
   selectedCellId: number | null;
   currentQuestion: QuestionItem | null;
@@ -254,6 +259,8 @@ export type GameAction =
   | {
       type: 'START_MATCH';
       payload?: Partial<{
+        answerMode: AnswerMode;
+        startingTeam: TeamId;
         team1Name: string;
         team2Name: string;
         team1Color: string;
@@ -294,6 +301,7 @@ export type GameAction =
   | { type: 'TIMER_PAUSE' }
   | { type: 'TIMER_RESET' }
   | { type: 'TIMER_TICK' }
+  | { type: 'MANUAL_ANSWER'; payload: { team: TeamId } }
   | { type: 'BUZZ_OPEN' }
   | { type: 'BUZZ_LOCK' }
   | { type: 'BUZZ_PRESS'; payload: { team: TeamId; questionNonce?: number } }

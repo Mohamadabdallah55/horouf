@@ -304,6 +304,7 @@ test('Game flow: selecting cell, revealing answer, changing question, claiming c
   assert.ok(state.currentQuestion !== null);
   assert.notEqual(state.currentQuestion.id, firstQuestionId);
 
+  state = applyGameAction(state, { type: 'MANUAL_ANSWER', payload: { team: 'team1' } });
   state = applyGameAction(state, { type: 'CLAIM_CELL', payload: { team: 'team1' } });
   assert.equal(state.cells[11].owner, 'team1');
   assert.equal(state.selectedCellId, null);
@@ -343,7 +344,7 @@ test('Win detection: Team 1 vertical path (top to bottom) and Team 2 horizontal 
 });
 
 test('Atomic Buzzer System: premature press, opening, first press wins, simultaneous lock, wrong answer handover, and correct answer cell award', () => {
-  let state = createInitialRoomState('BUZZ1', '2026', true);
+  let state = applyGameAction(createInitialRoomState('BUZZ1', '2026', true), {type:'START_MATCH',payload:{answerMode:'electronic'}});
 
   // 1. Select cell 12 (row 2, col 2) -> buzzer starts in 'locked' state (preparation phase)
   state = applyGameAction(state, { type: 'SELECT_CELL', payload: { cellId: 12 } });
@@ -430,4 +431,27 @@ test('Atomic Buzzer System: premature press, opening, first press wins, simultan
   });
   state = applyGameAction(state, { type: 'SELECT_CELL', payload: { cellId: 4 } });
   assert.equal(state.questionRevealed, true);
+});
+
+test('Manual: judge selects, wrong passes to opponent, winner chooses next, undo restores chooser', () => {
+  let s=applyGameAction(createInitialRoomState(),{type:'START_MATCH',payload:{answerMode:'manual',startingTeam:'team2'}});
+  s=applyGameAction(s,{type:'SELECT_CELL',payload:{cellId:12}});assert.ok(s.currentQuestion);
+  assert.equal(applyGameAction(s,{type:'BUZZ_OPEN'}),s);
+  assert.equal(applyGameAction(s,{type:'BUZZ_PRESS',payload:{team:'team1'}}),s);
+  s=applyGameAction(s,{type:'MANUAL_ANSWER',payload:{team:'team2'}});assert.equal(s.buzzer.winner,'team2');
+  assert.equal(applyGameAction(s,{type:'CLAIM_CELL',payload:{team:'team1'}}),s);
+  s=applyGameAction(s,{type:'BUZZ_WRONG_ANSWER'});assert.equal(s.buzzer.winner,'team1');
+  s=applyGameAction(s,{type:'BUZZ_CORRECT_ANSWER'});assert.equal(s.cells[12].owner,'team1');assert.equal(s.choosingTeam,'team1');
+  s=applyGameAction(s,{type:'UNDO_MOVE'});assert.equal(s.choosingTeam,'team2');
+});
+test('Turns: chooser first, both wrong keep letter open, new question resets attempts', () => {
+  let s=applyGameAction(createInitialRoomState(),{type:'START_MATCH',payload:{answerMode:'turns',startingTeam:'team2'}});
+  s=applyGameAction(s,{type:'SELECT_CELL',payload:{cellId:12}});assert.ok(s.currentQuestion);assert.equal(s.buzzer.winner,'team2');
+  assert.equal(s.buzzer.answerTimerRunning,false);
+  s=applyGameAction(s,{type:'SHOW_QUESTION'});assert.equal(s.buzzer.answerTimerRunning,true);
+  s=applyGameAction(s,{type:'BUZZ_WRONG_ANSWER'});assert.equal(s.buzzer.winner,'team1');
+  s=applyGameAction(s,{type:'BUZZ_WRONG_ANSWER'});assert.equal(s.buzzer.status,'exhausted');assert.equal(s.cells[12].owner,'none');
+  s=applyGameAction(s,{type:'NEW_QUESTION'});assert.equal(s.buzzer.winner,'team2');assert.equal(s.buzzer.lockedOutTeams.length,0);
+  s=applyGameAction(s,{type:'BUZZ_CORRECT_ANSWER'});assert.equal(s.cells[12].owner,'team2');assert.equal(s.choosingTeam,'team2');
+  s=applyGameAction({...s,winningTeam:'team2'},{type:'NEXT_ROUND'});assert.equal(s.choosingTeam,'team1');
 });

@@ -198,6 +198,8 @@ export function createInitialRoomState(
     version: 1,
     phase: autostart ? 'playing' : 'title',
     currentRound: 1,
+    choosingTeam: 'team1',
+    roundStartingTeam: 'team1',
     cells: createBoardCells(false),
     selectedCellId: null,
     currentQuestion: null,
@@ -228,6 +230,7 @@ export function createInitialRoomState(
       roundsWon: 0,
     },
     settings: {
+      answerMode: 'manual',
       totalRounds: 3,
       timerSeconds: 30,
       answerTimerSeconds: 10,
@@ -250,6 +253,20 @@ export function createInitialRoomState(
   };
 }
 
+function beginAnswering(state: RoomGameState, team: TeamId, now: number, runTimer = true) {
+  state.buzzer.status = 'locked_by_winner';
+  state.buzzer.winner = team;
+  state.buzzer.winnerTimestamp = now;
+  state.buzzer.answerTimerRemaining = state.settings.answerTimerSeconds || 10;
+  state.buzzer.answerTimerRunning = runTimer;
+  state.timerRunning = false;
+}
+function prepareAnswerMode(state: RoomGameState, now: number) {
+  if (!state.currentQuestion) { state.buzzer.status = 'locked'; state.timerRunning = false; return; }
+  if (state.settings.answerMode === 'turns') beginAnswering(state, state.choosingTeam, now, state.questionRevealed);
+  else if (state.settings.answerMode === 'manual') state.buzzer.status = 'locked';
+}
+
 /**
  * Pure reducer that applies a GameAction to a RoomGameState and returns a new RoomGameState.
  */
@@ -257,6 +274,8 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
   const now = Date.now();
   const next: RoomGameState = {
     ...state,
+    choosingTeam: state.choosingTeam || 'team1',
+    roundStartingTeam: state.roundStartingTeam || 'team1',
     cells: state.cells.map((c) => ({ ...c })),
     usedQuestionIds: [...state.usedQuestionIds],
     moveHistory: [...state.moveHistory],
@@ -266,6 +285,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
     team2: { ...state.team2 },
     settings: {
       ...state.settings,
+      answerMode: state.settings.answerMode || 'manual',
       selectedCategories: [...state.settings.selectedCategories],
       selectedSubCategories: [...(state.settings.selectedSubCategories || ALL_SUBCATEGORY_IDS)],
     },
@@ -280,6 +300,9 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
   switch (action.type) {
     case 'START_MATCH': {
       const p = action.payload || {};
+      if (p.answerMode === 'manual' || p.answerMode === 'electronic' || p.answerMode === 'turns') next.settings.answerMode = p.answerMode;
+      next.roundStartingTeam = p.startingTeam === 'team2' ? 'team2' : 'team1';
+      next.choosingTeam = next.roundStartingTeam;
       if (p.team1Name?.trim()) next.team1.name = p.team1Name.trim();
       if (p.team2Name?.trim()) next.team2.name = p.team2Name.trim();
       if (p.team1Color) next.team1.color = p.team1Color;
@@ -393,6 +416,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
 
       next.timerRemaining = next.settings.timerSeconds;
       next.timerRunning = next.settings.timerSeconds > 0;
+      prepareAnswerMode(next, now);
       return next;
     }
 
@@ -417,6 +441,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
     case 'SHOW_QUESTION': {
       if (next.selectedCellId === null) return state;
       next.questionRevealed = true;
+      if (next.settings.answerMode === 'turns' && next.buzzer.winner && next.buzzer.answerTimerRemaining > 0 && !next.answerRevealed) next.buzzer.answerTimerRunning = true;
       return next;
     }
 
@@ -477,6 +502,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
 
       next.timerRemaining = next.settings.timerSeconds;
       next.timerRunning = next.settings.timerSeconds > 0;
+      prepareAnswerMode(next, now);
       return next;
     }
 
@@ -517,10 +543,18 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
 
       next.timerRemaining = next.settings.timerSeconds;
       next.timerRunning = next.settings.timerSeconds > 0;
+      prepareAnswerMode(next, now);
       return next;
     }
 
+    case 'MANUAL_ANSWER': {
+      if (next.settings.answerMode !== 'manual' || next.phase !== 'playing' || next.selectedCellId === null || !next.currentQuestion || next.buzzer.winner || next.buzzer.lockedOutTeams.includes(action.payload.team)) return state;
+      if (action.payload.team !== 'team1' && action.payload.team !== 'team2') return state;
+      beginAnswering(next, action.payload.team, now);
+      return next;
+    }
     case 'BUZZ_OPEN': {
+      if (next.settings.answerMode !== 'electronic') return state;
       if (next.phase !== 'playing' || next.selectedCellId === null) return state;
       // If both teams are already locked out, reset lockedOutTeams so they can buzz
       if (next.buzzer.lockedOutTeams.length >= 2) {
@@ -535,6 +569,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
     }
 
     case 'BUZZ_LOCK': {
+      if (next.settings.answerMode !== 'electronic') return state;
       if (next.selectedCellId === null) return state;
       next.buzzer.status = 'locked';
       next.buzzer.winner = null;
@@ -544,6 +579,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
     }
 
     case 'BUZZ_PRESS': {
+      if (next.settings.answerMode !== 'electronic') return state;
       // Atomic server-authoritative buzzer press resolution:
       // 1. Must be in 'playing' phase with an active selected cell
       if (next.phase !== 'playing' || next.selectedCellId === null) {
@@ -612,7 +648,8 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       const otherTeam: TeamId = wrongTeam === 'team1' ? 'team2' : 'team1';
       if (!next.buzzer.lockedOutTeams.includes(otherTeam)) {
         // Automatically open the buzzer for the other team only!
-        next.buzzer.status = 'open';
+        if (next.settings.answerMode === 'electronic') next.buzzer.status = 'open';
+        else beginAnswering(next, otherTeam, now);
       } else {
         // Both teams answered wrong on this question
         next.buzzer.status = 'exhausted';
@@ -622,11 +659,8 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
 
     case 'BUZZ_RESET_RACE': {
       if (next.selectedCellId === null) return state;
-      next.buzzer = createBuzzerState(
-        'open',
-        state.buzzer.questionNonce + 1,
-        next.settings.answerTimerSeconds
-      );
+      next.buzzer = createBuzzerState(next.settings.answerMode === 'electronic' ? 'open' : 'locked', state.buzzer.questionNonce + 1, next.settings.answerTimerSeconds);
+      prepareAnswerMode(next, now);
       return next;
     }
 
@@ -641,6 +675,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
         return state;
       }
 
+      if (!next.currentQuestion || targetCellId !== next.selectedCellId || next.cells[targetCellId]?.owner !== 'none' || next.buzzer.winner !== action.payload.team) return state;
       return claimCellForTeam(next, targetCellId, action.payload.team, now);
     }
 
@@ -697,6 +732,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
         next.moveHistory.splice(moveIdx, 1);
       }
 
+      if (lastMove.previousChoosingTeam) next.choosingTeam = lastMove.previousChoosingTeam;
       const cell = next.cells[lastMove.cellId];
       if (cell) {
         cell.owner = lastMove.previousOwner;
@@ -721,6 +757,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
     }
 
     case 'SHUFFLE_BOARD': {
+      next.choosingTeam = next.roundStartingTeam;
       next.cells = createRoundBoard(next, true);
       next.selectedCellId = null;
       next.currentQuestion = null;
@@ -741,6 +778,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
     }
 
     case 'REPLAY_ROUND': {
+      next.choosingTeam = next.roundStartingTeam;
       const existingWinIdx = next.roundHistory.findIndex(
         (r) => r.roundNumber === next.currentRound
       );
@@ -776,6 +814,8 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
 
     case 'NEXT_ROUND': {
       next.currentRound = state.currentRound + 1;
+      next.roundStartingTeam = (state.winningTeam || next.roundStartingTeam) === 'team1' ? 'team2' : 'team1';
+      next.choosingTeam = next.roundStartingTeam;
       next.cells = createRoundBoard(next, true);
       next.selectedCellId = null;
       next.currentQuestion = null;
@@ -862,6 +902,7 @@ export function applyGameAction(state: RoomGameState, action: GameAction): RoomG
       next.settings = {
         ...next.settings,
         ...action.payload,
+        answerMode: next.settings.answerMode,
       };
       if (typeof action.payload.timerSeconds === 'number') {
         next.timerRemaining = action.payload.timerSeconds;
@@ -898,7 +939,9 @@ function claimCellForTeam(
   if (!cell) return next;
 
   const previousOwner = cell.owner;
+  const previousChoosingTeam = next.choosingTeam;
   cell.owner = newOwner;
+  next.choosingTeam = newOwner;
 
   const teamName = newOwner === 'team1' ? next.team1.name : next.team2.name;
   next.moveHistory.push({
@@ -908,6 +951,7 @@ function claimCellForTeam(
     cellId: targetCellId,
     letter: cell.letter,
     previousOwner,
+    previousChoosingTeam,
     newOwner,
     description: `منح حرف (${cell.letter}) لـ ${teamName}`,
   });

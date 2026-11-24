@@ -1,4 +1,5 @@
 import React from 'react';
+import { ChoiceStatus, ManualAnswerControls } from './AnswerModeControls';
 import {
   Bell,
   Check,
@@ -40,6 +41,7 @@ interface SideControlPanelProps {
   onOpenSyncModal: () => void;
   onTimerToggle: () => void;
   onTimerReset: () => void;
+  onManualAnswer: (team: TeamId) => void;
   onBuzzerOpen: () => void;
   onBuzzerLock: () => void;
   onBuzzerCorrectAnswer: () => void;
@@ -74,6 +76,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
   onOpenSyncModal,
   onTimerToggle,
   onTimerReset,
+  onManualAnswer,
   onBuzzerOpen,
   onBuzzerLock,
   onBuzzerCorrectAnswer,
@@ -135,6 +138,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
     >
       {/* Top Header: Round Title + Studio Menu Button */}
       <div className="flex flex-col gap-2 shrink-0">
+        <ChoiceStatus state={state}/>
         <div className="flex items-start justify-between gap-2">
           {/* Stylized 3D Broadcast Round Title */}
           <div className="flex flex-col leading-none pr-1">
@@ -465,7 +469,8 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
             </div>
 
             {/* Buzzer Control & Automatic Winner Result Section */}
-            {hasSelection && (
+            {hasSelection && state.settings.answerMode !== 'electronic' && <ManualAnswerControls state={state} isDisplayOnly={isDisplayOnly} onChoose={onManualAnswer} onCorrect={onBuzzerCorrectAnswer} onWrong={onBuzzerWrongAnswer} onNewQuestion={onNewQuestion}/>}
+            {hasSelection && state.settings.answerMode === 'electronic' && (
               <div className="w-full space-y-2 pt-1 border-t border-white/10">
                 {/* 1. When a team has buzzed in first! */}
                 {buzzer.status === 'locked_by_winner' && buzzerWinnerTeam ? (
@@ -685,7 +690,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
         {/* Team 1 Pill Bar (Green — Vertical Path) */}
         <button
           type="button"
-          disabled={isDisplayOnly || !hasSelection}
+          disabled={isDisplayOnly || !hasSelection || buzzer.winner !== 'team1'}
           onClick={() => onClaimCell('team1')}
           data-testid="btn-claim-team1"
           aria-label={`منح الخلية لـ ${state.team1.name} - الرصيد الحالي ${team1OwnedCount}`}
@@ -748,7 +753,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
         {/* Team 2 Pill Bar (Orange — Horizontal Path) */}
         <button
           type="button"
-          disabled={isDisplayOnly || !hasSelection}
+          disabled={isDisplayOnly || !hasSelection || buzzer.winner !== 'team2'}
           onClick={() => onClaimCell('team2')}
           data-testid="btn-claim-team2"
           aria-label={`منح الخلية لـ ${state.team2.name} - الرصيد الحالي ${team2OwnedCount}`}

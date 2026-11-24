@@ -28,6 +28,7 @@ export const TeamBuzzerScreen: React.FC<TeamBuzzerScreenProps> = ({
     buzzer.winner !== null &&
     buzzer.winner !== teamId;
   const isReadyToPress =
+    state.settings.answerMode === 'electronic' &&
     wsConnected &&
     authorized &&
     state.phase === 'playing' &&
@@ -86,6 +87,11 @@ export const TeamBuzzerScreen: React.FC<TeamBuzzerScreenProps> = ({
     statusHeadline = 'جهاز آخر معتمد لهذا الفريق';
     statusSubtext = 'يرجى الطلب من المقدم إعادة تعيين اتصال الفريق من الشاشة الرئيسية';
     buttonBgClass = 'bg-slate-900/80 border-amber-400 text-amber-200';
+    StatusIcon = Lock;
+  } else if (state.settings.answerMode !== 'electronic') {
+    statusHeadline = 'الجرس الإلكتروني غير مستخدم';
+    statusSubtext = 'تابع اللعبة مع المقدم؛ وضع الإجابة الحالي لا يحتاج الضغط على الجرس.';
+    buttonBgClass = 'bg-black/45 border-white/25 text-white';
     StatusIcon = Lock;
   } else if (isWinner) {
     statusHeadline = 'أنت الأول!';

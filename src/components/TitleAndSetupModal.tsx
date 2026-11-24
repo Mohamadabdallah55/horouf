@@ -38,6 +38,8 @@ import { getRoundedHexPath } from '../game/hexMath';
 import { normalizeForComparison } from '../game/arabicNormalization';
 import {
   AgeGroupId,
+  AnswerMode,
+  TeamId,
   CategoryPreset,
   DifficultyLevel,
   FontFamilyId,
@@ -60,6 +62,8 @@ interface TitleAndSetupModalProps {
     team2Color: string;
     totalRounds: number;
     timerSeconds: number;
+    answerMode: AnswerMode;
+    startingTeam: TeamId;
     theme: VisualThemeId;
     fontFamily: FontFamilyId;
     selectedCategories: QuestionCategory[];
@@ -121,6 +125,8 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
   const [team2Name, setTeam2Name] = useState(state.team2.name || 'الفريق البرتقالي');
   const [team1Color, setTeam1Color] = useState(state.team1.color || '#28B81E');
   const [team2Color, setTeam2Color] = useState(state.team2.color || '#FF7724');
+  const [answerMode, setAnswerMode] = useState<AnswerMode>(state.settings.answerMode || 'manual');
+  const [startingTeam, setStartingTeam] = useState<TeamId>('team1');
   const [totalRounds, setTotalRounds] = useState(state.settings.totalRounds || 3);
   const [timerSeconds, setTimerSeconds] = useState(state.settings.timerSeconds ?? 30);
   const [theme, setTheme] = useState<VisualThemeId>(state.settings.theme || 'classic');
@@ -324,6 +330,8 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
       team2Color,
       totalRounds,
       timerSeconds,
+      answerMode,
+      startingTeam,
       theme,
       fontFamily,
       selectedCategories: effectiveCategories,
@@ -517,6 +525,11 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                 </span>
               </div>
 
+              <fieldset className="rounded-2xl border border-white/20 bg-[#21132e] p-3 space-y-2">
+                <legend className="px-2 text-sm font-black text-amber-300">نظام الإجابة</legend>
+                {([{id:'manual',label:'بدون جرس',desc:'المقدم يحدد الأسرع بالإجابة أو رفع اليد.'},{id:'electronic',label:'جرس إلكتروني',desc:'أول جهاز يضغط يأخذ فرصة الإجابة.'},{id:'turns',label:'تناوب الأدوار',desc:'صاحب اختيار الحرف يجيب أولًا، ثم الخصم عند الخطأ.'}] as const).map(mode=><label key={mode.id} className={`flex items-center gap-3 rounded-xl border p-2.5 cursor-pointer ${answerMode===mode.id?'bg-amber-400/15 border-amber-400':'bg-white/5 border-white/10'}`}><input type="radio" name="answer-mode" checked={answerMode===mode.id} onChange={()=>setAnswerMode(mode.id)} className="accent-amber-400"/><span><b className="block text-sm">{mode.label}</b><small className="block text-white/75 text-xs">{mode.desc}</small></span></label>)}
+                <div className="flex flex-wrap items-center gap-2 text-xs"><span className="font-bold">مين بختار أول حرف؟</span><select value={startingTeam} onChange={e=>setStartingTeam(e.target.value as TeamId)} className="rounded-lg bg-[#301c43] border border-white/20 p-2"><option value="team1">{team1Name||'الفريق الأول'}</option><option value="team2">{team2Name||'الفريق الثاني'}</option></select><button type="button" onClick={()=>setStartingTeam(Math.random()<0.5?'team1':'team2')} className="rounded-lg px-3 py-2 bg-amber-400 text-slate-950 font-black">قرعة</button></div>
+              </fieldset>
               {/* Team 1 & Team 2 Config */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {/* Team 1 (Green - Top to Bottom) */}

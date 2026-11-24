@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ChoiceStatus, ManualAnswerControls } from './AnswerModeControls';
 import {
   Bell,
   Check,
@@ -96,6 +97,7 @@ export const HostMobileView: React.FC<HostMobileViewProps> = ({
           </button>
         </div>
 
+        <ChoiceStatus state={state}/>
         {/* Live Team Buzzer Connection Status */}
         <div className="rounded-xl bg-[#160826] border border-white/10 px-3 py-1.5 flex items-center justify-between text-xs font-bold">
           <div className="flex items-center gap-1.5">
@@ -373,7 +375,8 @@ export const HostMobileView: React.FC<HostMobileViewProps> = ({
         )}
 
         {/* Host Buzzer Race Control Panel */}
-        {hasSelection && (
+        {hasSelection && state.settings.answerMode !== 'electronic' && <ManualAnswerControls state={state} onChoose={team=>onDispatch({type:'MANUAL_ANSWER',payload:{team}})} onCorrect={()=>onDispatch({type:'BUZZ_CORRECT_ANSWER'})} onWrong={()=>onDispatch({type:'BUZZ_WRONG_ANSWER'})} onNewQuestion={()=>onDispatch({type:'NEW_QUESTION'})}/>}
+        {hasSelection && state.settings.answerMode === 'electronic' && (
           <div className="rounded-2xl bg-[#160826] border border-white/15 p-3 space-y-2">
             {buzzer.status === 'locked_by_winner' && buzzerWinnerTeam ? (
               <div
@@ -552,7 +555,7 @@ export const HostMobileView: React.FC<HostMobileViewProps> = ({
         <div className="grid grid-cols-2 gap-3 pt-1">
           <button
             type="button"
-            disabled={!hasSelection}
+            disabled={!hasSelection || buzzer.winner !== 'team1'}
             onClick={() =>
               onDispatch({ type: 'CLAIM_CELL', payload: { team: 'team1' as TeamId } })
             }
@@ -571,7 +574,7 @@ export const HostMobileView: React.FC<HostMobileViewProps> = ({
 
           <button
             type="button"
-            disabled={!hasSelection}
+            disabled={!hasSelection || buzzer.winner !== 'team2'}
             onClick={() =>
               onDispatch({ type: 'CLAIM_CELL', payload: { team: 'team2' as TeamId } })
             }

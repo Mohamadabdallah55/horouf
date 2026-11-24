@@ -252,7 +252,7 @@ export default function App() {
   // Play sound cue when a team wins the buzzer race automatically
   useEffect(() => {
     if (
-      gameState.buzzer.winner &&
+      gameState.settings.answerMode === 'electronic' && gameState.buzzer.winner &&
       gameState.buzzer.winner !== prevBuzzerWinnerRef.current
     ) {
       soundFX.playBuzzerWin(gameState.buzzer.winner);
@@ -605,7 +605,7 @@ export default function App() {
       }}
     >
       {/* Illuminated Screen Border Overlay when a Team Wins the Buzzer Race */}
-      {gameState.buzzer.status === 'locked_by_winner' && buzzerWinnerTeam && (
+      {gameState.settings.answerMode === 'electronic' && gameState.buzzer.status === 'locked_by_winner' && buzzerWinnerTeam && (
         <div
           aria-hidden="true"
           data-testid="main-screen-buzzer-border"
@@ -663,7 +663,7 @@ export default function App() {
         />
 
         {/* Floating Buzzer Race Winner Toast on Top of Board Arena */}
-        {gameState.buzzer.status === 'locked_by_winner' && buzzerWinnerTeam && (
+        {gameState.settings.answerMode === 'electronic' && gameState.buzzer.status === 'locked_by_winner' && buzzerWinnerTeam && (
           <div
             dir="rtl"
             data-testid="board-buzzer-announcement"
@@ -717,6 +717,7 @@ export default function App() {
             })
           }
           onTimerReset={() => dispatchAction({ type: 'TIMER_RESET' })}
+          onManualAnswer={(team) => dispatchAction({type:'MANUAL_ANSWER',payload:{team}})}
           onBuzzerOpen={() => dispatchAction({ type: 'BUZZ_OPEN' })}
           onBuzzerLock={() => dispatchAction({ type: 'BUZZ_LOCK' })}
           onBuzzerCorrectAnswer={() =>
