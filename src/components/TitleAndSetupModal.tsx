@@ -400,35 +400,20 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
       </svg>
 
       {/* Main Content Container: Classic 2-Column Split (Right: 3D Emblem & Side PRO Tools | Left: Match & Team Setup Card) */}
-      <div className="relative z-10 flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
-        <div className="hr-home-grid w-full max-w-[1500px] mx-auto">
+      <div className="hr-home-main relative z-10 flex-1">
+        <div className="hr-home-grid w-full mx-auto">
+          <header className="hr-brand-header">
+            <div className="hr-brand-copy"><div className="hr-brand-kicker"><Trophy size={15}/> ساحة الألعاب · حروف وسرعة وذكاء</div><h1 className="hr-wordmark" aria-label="حروف مع النخبة"><span className="hr-word-horouf">حروف</span><span className="hr-word-with">مع</span><span className="hr-word-elite">النخبة</span></h1><p>حرف بيفرق… ومسار بيفوز!</p></div>
+            <div className="hr-brand-info"><b>تحدي الفريقين</b><span>جاوب صح، امتلك الحرف، ووصّل طرفي اللوحة.</span><div className="hr-brand-chips"><span><i style={{background:team1Color}}/> عمودي ↕</span><span><i style={{background:team2Color}}/> أفقي ↔</span><span>25 حرفًا</span></div></div>
+            <a className="hr-home-back" href="https://say-it-u1w6.onrender.com/">ساحة الألعاب ↗</a>
+          </header>
           {/* Right Column (6 cols): Original 3D Tilted Title Emblem + Side PRO Feature Triggers */}
-          <div className="hr-hero-area flex flex-col items-center justify-center text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#311042]/65 border border-white/20 text-amber-300 text-xs sm:text-sm font-extrabold mb-3 shadow-lg">
-              <Trophy className="w-4 h-4" />
-              <span>ساحة ألعاب حروف النخبة</span>
-            </div>
-
-            <h1 className="hr-logo mb-3 w-[min(52vw,12rem)] lg:w-[clamp(10rem,17vw,15rem)]">
-              <img
-                src="/assets/brand/horouf-logo.jpg"
-                alt="حروف مع النخبة"
-                width={640}
-                height={640}
-                fetchPriority="high"
-                className="w-full rounded-[24%]"
-              />
-            </h1>
-
-            <div className="hr-hero-copy">
-              <span>حروف · سرعة · ذكاء</span>
-              <h2>حرف بيفرق…<br/>ومسار بيفوز!</h2>
-              <p>جاوب صح، امتلك الحرف، ووصّل طرفي اللوحة قبل خصمك.</p>
-            </div>
+          <div className="hr-hero-area flex flex-col items-center text-center">
+            <div className="hr-board-heading"><b>لوحة التحدي</b><span>5 × 5</span></div>
             <div className="hr-preview" aria-hidden="true">
-              <svg viewBox="0 0 410 280" className="hr-preview-svg">
+              <svg viewBox="0 0 410 286" className="hr-preview-svg">
                 {['ح','ر','و','ف','ن','خ','ب','ة','س','م','ع','ك','ل','ق','ت','أ','ج','د','ز','ش','ص','ط','ظ','غ','ي'].map((letter,i)=>{
-                  const row=Math.floor(i/5),col=i%5,cx=51+col*70+(row%2)*35,cy=38+row*51;
+                  const row=Math.floor(i/5),col=i%5,cx=42+col*70+(row%2)*35,cy=38+row*51;
                   const color=col===1 ? team1Color : row===1&&col>=2 ? team2Color : '#fff2d6';
                   return <g key={i}><path d={getRoundedHexPath(cx,cy,38,4)} fill="#190f2b" transform="translate(0 3)"/><path d={getRoundedHexPath(cx,cy,36,4)} fill={color} stroke="#21132d" strokeWidth="2"/><text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="#251435" fontSize="26" fontWeight="900">{letter}</text></g>;
                 })}
@@ -438,7 +423,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
 
             <div className="hr-home-stats"><div><b>{allQuestions.length.toLocaleString('en-US')}</b><span>سؤال بالبنك</span></div><div><b>{selectedSubIds.length}</b><span>فئة محددة</span></div><div><b>25</b><span>خلية باللوحة</span></div></div>
             {/* Side PRO Action Buttons Dock (Categories Drawer, 28-Letter Coverage, Question Bank Admin, Buzzer, Display Mode) */}
-            <div className="mt-4 w-full max-w-md space-y-2.5">
+            <div className="hr-tool-dock w-full space-y-2">
               {/* Primary Side PRO Trigger: Open Category Cards & 6 Illustrated Showcase Drawer */}
               <button
                 type="button"
@@ -468,7 +453,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
               </button>
 
               {/* Secondary Side Buttons Row */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="hr-tool-grid grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={onOpenSyncModal}
@@ -520,13 +505,13 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
               <div className="hr-start-team"><label htmlFor="hr-first-team">أول اختيار</label><select id="hr-first-team" value={startingTeam} onChange={e=>setStartingTeam(e.target.value as TeamId)}><option value="team1">{team1Name||'الفريق الأول'}</option><option value="team2">{team2Name||'الفريق الثاني'}</option></select><button type="button" onClick={()=>setStartingTeam(Math.random()<0.5?'team1':'team2')}>قرعة</button></div>
             </div>
             <div className="hr-mode-card hr-rules-mini"><h2>طريقة الفوز</h2><p><i style={{background:team1Color}}/> {team1Name||'الفريق الأول'} · أعلى ↕ أسفل</p><p><i style={{background:team2Color}}/> {team2Name||'الفريق الثاني'} · يمين ↔ يسار</p><small>الفريق اللي بجاوب صح بختار الحرف التالي.</small></div>
-            <div className="hr-mode-card"><h2>المباراة جاهزة؟</h2><p className="text-xs text-white/70">الجولات: {totalRounds} · {timerSeconds?timerSeconds+' ثانية':'بدون مؤقت'}</p><button className="hr-side-start" type="submit" form="hr-match-form" disabled={coverageSummary.totalMatchingQuestions===0}>ابدأ اللعب <Play size={15}/></button></div>
+            <div className="hr-mode-card hr-ready-mini"><h2>ملخص الجولة</h2><p><b>{totalRounds}</b> جولات · <b>{timerSeconds||'∞'}</b> {timerSeconds?'ثانية':'بدون مؤقت'}</p><small>{coverageSummary.totalMatchingQuestions} سؤال متاح</small></div>
           </aside>
           {/* Left Column (6 cols): Classic Match & Team Configuration Card + Difficulty & Age Controls */}
           <div className="hr-settings-area">
             <form
               onSubmit={handleStartGame}
-              id="hr-match-form" className="hr-setup rounded-3xl p-4 sm:p-5 text-white space-y-3"
+              id="hr-match-form" className="hr-setup rounded-3xl text-white space-y-3"
             >
               <div className="flex items-center justify-between border-b border-white/15 pb-3">
                 <h2 className="text-lg sm:text-xl font-black text-white">
@@ -816,7 +801,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
       </div>
 
       {/* Bottom Studio Attribution Bar */}
-      <div className="relative z-10 pb-3 pt-1 text-center">
+      <div className="hr-home-footer relative z-10 text-center">
         <div className="inline-flex items-center gap-3 text-white/75 tracking-widest font-black text-xs sm:text-sm">
           <span>حروف النخبة</span>
           <span className="text-amber-300">•</span>
