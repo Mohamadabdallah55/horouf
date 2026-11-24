@@ -599,7 +599,7 @@ export default function App() {
     <main
       dir="ltr"
       data-buzzer-winner={buzzerWinner || 'none'}
-      className="fixed inset-0 w-screen h-screen overflow-hidden flex flex-col md:flex-row bg-[#1e1035]"
+      className="hr-game fixed inset-0 w-full h-dvh overflow-hidden flex flex-col md:flex-row bg-[#1e1035]"
       style={{
         fontFamily: `'${gameState.settings.fontFamily}', 'Cairo', 'Tajawal', sans-serif`,
       }}
@@ -637,7 +637,7 @@ export default function App() {
 
       {/* Left 68% Arena: 25-Hexagon Board */}
       <section
-        className="w-full md:w-[68%] lg:w-[70%] h-[56%] md:h-full relative overflow-hidden"
+        className="hr-arena w-full md:w-[64%] lg:w-[68%] h-[52%] md:h-full relative overflow-hidden"
         aria-label="ساحة اللوحة السداسية"
       >
         <HexBoard
@@ -681,7 +681,7 @@ export default function App() {
       </section>
 
       {/* Right 32% Panel: Question Box, Buzzer Controls, Answer Reveal, and Team Claim Bars */}
-      <section className="w-full md:w-[32%] lg:w-[30%] h-[44%] md:h-full relative z-10">
+      <section className="hr-side w-full md:w-[36%] lg:w-[32%] h-[48%] md:h-full relative z-10">
         <SideControlPanel
           state={gameState}
           presence={presence}

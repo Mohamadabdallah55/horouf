@@ -107,7 +107,7 @@ export const HexBoard: React.FC<HexBoardProps> = ({
 
   return (
     <div
-      className="relative w-full h-full flex items-center justify-center overflow-hidden select-none"
+      className="hr-board relative w-full h-full flex items-center justify-center overflow-hidden select-none"
       data-testid="hex-board-container"
     >
       <svg
@@ -128,6 +128,7 @@ export const HexBoard: React.FC<HexBoardProps> = ({
             <feDropShadow dx="0" dy="0" stdDeviation="12" floodColor="#fde047" floodOpacity="0.95" />
           </filter>
 
+          <linearGradient id="hr-neutral" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor="#FFFAEB"/><stop offset="100%" stopColor="#E5D4B4"/></linearGradient>
           {/* Inner highlight gradient for elite clash theme */}
           <linearGradient id="selected-grad" x1="0%" y1="0%" x2="0%" y2="100%">
             <stop offset="0%" stopColor="#FFE600" />
@@ -136,7 +137,7 @@ export const HexBoard: React.FC<HexBoardProps> = ({
         </defs>
 
         {/* 4 Directional Arena Quadrants (Top/Bottom = Team 1 Green, Left/Right = Team 2 Orange) */}
-        <g aria-hidden="true">
+        <g aria-hidden="true" opacity="0.8">
           {/* Top Quadrant (Team 1) */}
           <polygon
             points={`-500,-500 ${VIEW_W + 500},-500 ${CENTER_X},${CENTER_Y}`}
@@ -227,7 +228,7 @@ export const HexBoard: React.FC<HexBoardProps> = ({
             const isWinningCell = winningSet.has(cell.id);
             const isRecentlyClaimed = recentlyClaimedId === cell.id;
 
-            let fillColor = '#FFFFFF';
+            let fillColor = 'url(#hr-neutral)';
             if (cell.owner === 'team1') {
               fillColor = team1.color;
             } else if (cell.owner === 'team2') {
@@ -263,6 +264,7 @@ export const HexBoard: React.FC<HexBoardProps> = ({
               <g
                 key={cell.id}
                 role="button"
+                aria-disabled={!canClick}
                 tabIndex={canClick ? 0 : -1}
                 aria-label={`خلية رقم ${cell.id + 1} حرف ${cell.letter} - ${ownerStatusLabel}`}
                 data-testid={`hex-cell-${cell.id}`}
@@ -276,7 +278,7 @@ export const HexBoard: React.FC<HexBoardProps> = ({
                     handleHexClick(cell);
                   }
                 }}
-                className={`${
+                className={`hr-hex ${
                   canClick ? 'cursor-pointer' : 'cursor-default'
                 } transition-transform duration-150 focus:outline-none ${
                   isWinningCell
@@ -291,7 +293,8 @@ export const HexBoard: React.FC<HexBoardProps> = ({
                   d={hexPath}
                   fill={fillColor}
                   stroke={isWinningCell ? '#FEF08A' : hexBorderColor}
-                  strokeWidth={isWinningCell ? 8 : 6.5}
+                  className="hr-hex-face"
+                  strokeWidth={isWinningCell ? 8 : 4.5}
                   strokeLinejoin="round"
                   filter={isWinningCell ? 'url(#win-glow)' : undefined}
                 />
@@ -342,7 +345,7 @@ export const HexBoard: React.FC<HexBoardProps> = ({
                       fill="rgba(0,0,0,0.12)"
                       style={{
                         fontFamily: `'${fontFamily}', 'Alexandria', 'Cairo', sans-serif`,
-                        fontSize: cell.letter.length > 1 ? '48px' : '56px',
+                        fontSize: cell.letter.length > 1 ? '52px' : '65px',
                         fontWeight: 900,
                       }}
                     >
@@ -358,7 +361,7 @@ export const HexBoard: React.FC<HexBoardProps> = ({
                       fill={letterFill}
                       style={{
                         fontFamily: `'${fontFamily}', 'Alexandria', 'Cairo', sans-serif`,
-                        fontSize: cell.letter.length > 1 ? '48px' : '56px',
+                        fontSize: cell.letter.length > 1 ? '52px' : '65px',
                         fontWeight: 900,
                       }}
                     >
@@ -371,6 +374,15 @@ export const HexBoard: React.FC<HexBoardProps> = ({
           })}
         </g>
 
+        {/* The direction labels use the actual team colors; no game logic changes. */}
+        <g aria-hidden="true" pointerEvents="none" fontFamily="Cairo, sans-serif" fontWeight="900" fontSize="23" textAnchor="middle">
+          <rect x="365" y="27" width="270" height="42" rx="18" fill="#21142e" stroke={team1.color} strokeWidth="3"/>
+          <text x="500" y="55" fill="#fff9e9">↕ {team1.name.length>18?team1.name.slice(0,17)+'…':team1.name}</text>
+          <rect x="365" y="810" width="270" height="42" rx="18" fill="#21142e" stroke={team1.color} strokeWidth="3"/>
+          <text x="500" y="838" fill="#fff9e9">طرف المسار العمودي</text>
+          <g transform="translate(33 440) rotate(-90)"><rect x="-126" y="-20" width="252" height="40" rx="17" fill="#21142e" stroke={team2.color} strokeWidth="3"/><text y="8" fill="#fff9e9">↔ {team2.name.length>18?team2.name.slice(0,17)+'…':team2.name}</text></g>
+          <g transform="translate(967 440) rotate(90)"><rect x="-126" y="-20" width="252" height="40" rx="17" fill="#21142e" stroke={team2.color} strokeWidth="3"/><text y="8" fill="#fff9e9">طرف المسار الأفقي</text></g>
+        </g>
         {/* Illuminated Winning Path Connector Line */}
         {winningCenters.length >= 2 && (
           <g aria-hidden="true" className="pointer-events-none">

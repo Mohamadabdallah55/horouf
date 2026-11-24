@@ -130,7 +130,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
   return (
     <aside
       dir="rtl"
-      className={`w-full h-full flex flex-col justify-between px-4 py-3 select-none ${panelBg} text-white relative overflow-y-auto`}
+      className={`hr-control w-full h-full flex flex-col justify-between px-4 py-3 select-none ${panelBg} text-white relative overflow-y-auto`}
       aria-label="لوحة التحكم والأسئلة"
     >
       {/* Top Header: Round Title + Studio Menu Button */}
@@ -307,7 +307,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
 
       {/* Center Dark Purple Question & Buzzer Container */}
       <div
-        className={`my-1.5 flex-1 flex flex-col justify-between rounded-[26px] p-3.5 pt-6 relative shadow-2xl ${cardOuterBg}`}
+        className={`hr-question-card my-1.5 flex-1 flex flex-col justify-between rounded-[26px] p-3.5 pt-6 relative ${cardOuterBg}`}
       >
         {/* Top Floating Letter Hexagon Badge */}
         <div className="relative flex-1 flex flex-col">
@@ -351,7 +351,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
 
           {/* Inner Question Card */}
           <div
-            className={`w-full flex-1 rounded-2xl border px-3.5 pt-8 pb-2.5 flex flex-col items-center justify-between text-center ${cardInnerBg}`}
+            className={`hr-question-inner w-full flex-1 rounded-2xl border px-3.5 pt-8 pb-2.5 flex flex-col items-center justify-between text-center ${cardInnerBg}`}
           >
             {/* Category, Difficulty & Timer Header */}
             <div className="w-full flex items-center justify-between text-xs text-purple-200/80 px-1 gap-1">
@@ -421,9 +421,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
               data-testid="question-box"
             >
               {!hasSelection ? (
-                <p className="text-base xl:text-lg font-extrabold text-white/90 leading-relaxed">
-                  اختر خلية لإظهار السؤال...
-                </p>
+                <div className="hr-question-empty"><span aria-hidden="true">؟</span><b>اختار حرفك!</b><p>اضغط على أي خلية متاحة لبدء السؤال.</p></div>
               ) : state.questionExhaustedForLetter ? (
                 <div
                   data-testid="question-shortage-alert"
@@ -460,7 +458,7 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
                   </p>
                 </div>
               ) : (
-                <p className="text-base xl:text-[19px] font-extrabold text-white leading-relaxed">
+                <p className="hr-question-text font-extrabold text-white leading-relaxed">
                   {state.currentQuestion?.question}
                 </p>
               )}
@@ -681,6 +679,9 @@ export const SideControlPanel: React.FC<SideControlPanelProps> = ({
 
       {/* Bottom Team Score & Cell Claim Bars */}
       <div className="flex flex-col gap-2 shrink-0">
+        <div className="hr-cell-meter" aria-label={`الخلايا: ${team1OwnedCount} للفريق الأول، ${team2OwnedCount} للفريق الثاني، ${Math.max(0,state.cells.length-team1OwnedCount-team2OwnedCount)} متاحة`}>
+          {Array.from({length:state.cells.length},(_,i)=><i key={i} style={{background:i<team1OwnedCount?state.team1.color:i<team1OwnedCount+team2OwnedCount?state.team2.color:'#e9dfca'}}/>)}
+        </div>
         {/* Team 1 Pill Bar (Green — Vertical Path) */}
         <button
           type="button"

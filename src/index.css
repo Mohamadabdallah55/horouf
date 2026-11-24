@@ -61,3 +61,44 @@
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+/* Horouf Al-Nokhba — game-show edition; CSS and SVG only, no new dependencies. */
+.hr-home{background:radial-gradient(ellipse at 85% 12%,#52316d 0%,transparent 50%),radial-gradient(ellipse at 8% 100%,#36204a 0%,transparent 50%),#1b1128;}
+.hr-home>svg{opacity:.4;}
+.hr-logo{filter:drop-shadow(0 5px 0 #130a1b);}
+.hr-hero-copy{display:grid;gap:5px;text-align:center;max-width:36rem;color:#fff8e8;}
+.hr-hero-copy>span{font-size:.75rem;font-weight:900;color:#ffe057;letter-spacing:.025em;}
+.hr-hero-copy h2{font-family:var(--font-display);font-size:clamp(1.65rem,3.2vw,2.75rem);font-weight:950;line-height:1.35;text-shadow:0 3px #140b22;}
+.hr-hero-copy p{font-size:.85rem;font-weight:700;line-height:1.6;color:#e8dcef;}
+.hr-preview{width:min(100%,340px);padding:8px 12px;margin-top:10px;background:#241632;border:1px solid #68497e;border-radius:18px;box-shadow:0 5px #100a1a;}
+.hr-preview-svg{display:block;width:100%;height:110px;}
+.hr-preview-legend{display:flex;justify-content:center;gap:16px;font-size:.68rem;font-weight:800;color:#fff7e7;}
+.hr-preview-legend span{display:flex;align-items:center;gap:5px;}
+.hr-preview-legend i{height:10px;width:10px;border-radius:3px;border:1px solid #fff9;}
+.hr-setup{background:#2c1c3d;border:2px solid #755293;box-shadow:0 7px #100a1a,0 14px 24px #0003;}
+.hr-start{background:#ffe047!important;box-shadow:0 5px #ac7821!important;}
+.hr-home [data-testid="btn-open-categories-drawer"]{background:#442a5c;border-color:#a27aca;box-shadow:0 4px #160d22;}
+.hr-home [data-testid="title-btn-activate-buzzer"],.hr-home [data-testid="btn-open-letter-coverage"],.hr-home [data-testid="btn-open-content-admin"]{min-height:48px;line-height:1.4;}
+.hr-arena{background:#221431;padding:8px;}
+.hr-board{border:2px solid #a88b68;border-radius:20px;background:#1a1025;box-shadow:0 4px #130a1c;}
+.hr-hex[aria-disabled="false"]:hover .hr-hex-face,.hr-hex:focus-visible .hr-hex-face{stroke:#fff1a3;stroke-width:8;}
+.hr-hex[aria-disabled="false"]:active .hr-hex-face{stroke:#ffe047;stroke-width:8;}
+.hr-control{padding:12px;gap:8px;}
+.hr-question-card{box-shadow:0 5px #110b1b;border:1px solid #8d6bac;min-height:215px;}
+.hr-question-inner{background:#36244d;border-color:#8866aa;}
+.hr-question-text{font-size:clamp(1rem,1.7vw,1.6rem);overflow-wrap:anywhere;}
+.hr-question-empty{display:flex;flex-direction:column;align-items:center;gap:5px;color:#fff7e8;}
+.hr-question-empty>span{width:56px;height:56px;display:grid;place-items:center;background:#ffe047;color:#261535;border-radius:16px;font-size:2rem;font-weight:950;box-shadow:0 4px #a87823;}
+.hr-question-empty b{font-size:1.4rem;color:#ffe047;}
+.hr-question-empty p{font-size:.8rem;color:#e8d9ef;}
+.hr-cell-meter{display:grid;grid-template-columns:repeat(25,minmax(0,1fr));gap:3px;padding:4px;}
+.hr-cell-meter i{height:8px;border-radius:3px;border:1px solid #fff2;}
+.hr-victory-card{background:linear-gradient(160deg,#3f245a,#23142f);border:3px solid #ffe047;box-shadow:0 7px #aa7826,0 14px 35px #0005;max-height:calc(100dvh - 32px);overflow:auto;}
+.hr-victory-trophy{background:linear-gradient(145deg,#ffe57b,#b77b1e);color:#2d183a;box-shadow:0 6px #80521c,0 10px 20px #0004;border:2px solid #fff1bc;}
+.hr-buzzer-button{min-height:200px;touch-action:manipulation;box-shadow:0 7px 0 #0005;}
+.hr-home button:focus-visible,.hr-game button:focus-visible,.hr-buzzer button:focus-visible{outline:3px solid #ffe047;outline-offset:2px;}
+.animate-win-hex{animation:winPathPulse .65s ease-out 2 both;}
+.animate-selected-hex{animation:none;}
+.animate-sunrays{animation:none;}
+@media(max-width:767px){.hr-arena{padding:4px;min-height:240px;}.hr-board{border-radius:12px;}.hr-control{padding:8px;}.hr-question-card{min-height:195px;}.hr-home .hr-preview{max-width:270px;}.hr-preview-svg{height:90px;}.hr-victory-card{padding:14px;}.hr-game{overflow-y:auto;}.hr-side{min-height:320px;}}
+@media(prefers-reduced-motion:reduce){.animate-win-hex,.animate-selected-hex,.animate-sunrays{animation:none!important;}}

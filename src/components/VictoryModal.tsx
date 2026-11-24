@@ -82,7 +82,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
   return (
     <div
       dir="rtl"
-      className="fixed inset-0 z-40 bg-[#2A1046]/80 flex items-center justify-center p-4 select-none overflow-hidden"
+      className="hr-victory fixed inset-0 z-40 bg-[#140a25]/95 flex items-center justify-center p-4 select-none overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-label={`فوز ${winningTeam.name}`}
@@ -112,7 +112,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
         })}
       </svg>
 
-      <div className="relative z-10 w-full max-w-xl rounded-3xl bg-[#230E3B] border-4 border-amber-400 p-6 sm:p-7 text-white shadow-2xl text-center space-y-5">
+      <div className="hr-victory-card relative z-10 w-full max-w-xl rounded-3xl p-5 sm:p-7 text-white text-center space-y-5">
         {/* Top Row: Inspect Board Button + Trophy Badge */}
         <div className="flex items-center justify-between">
           <button
@@ -136,7 +136,7 @@ export const VictoryModal: React.FC<VictoryModalProps> = ({
 
         {/* Center 3D Extruded Round / Winner Headline */}
         <div className="space-y-2 py-1">
-          <div className="mx-auto w-14 h-14 rounded-2xl bg-amber-400/20 border-2 border-amber-400 flex items-center justify-center text-amber-300 shadow-lg mb-2">
+          <div className="hr-victory-trophy mx-auto w-20 h-20 rounded-2xl flex items-center justify-center text-amber-300 mb-2">
             {isMatchOver ? (
               <Trophy className="w-8 h-8" />
             ) : (

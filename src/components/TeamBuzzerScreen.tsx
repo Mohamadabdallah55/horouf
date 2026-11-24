@@ -118,7 +118,7 @@ export const TeamBuzzerScreen: React.FC<TeamBuzzerScreenProps> = ({
     <main
       dir="rtl"
       style={{ backgroundColor: team.color }}
-      className="fixed inset-0 w-screen h-screen overflow-hidden flex flex-col justify-between p-5 sm:p-8 select-none text-white"
+      className="hr-buzzer fixed inset-0 w-full h-dvh overflow-y-auto flex flex-col justify-between p-4 sm:p-8 select-none text-white"
       data-testid={`team-buzzer-screen-${teamId}`}
       data-buzzer-status={buzzer.status}
       data-is-winner={isWinner ? 'true' : 'false'}
@@ -176,7 +176,7 @@ export const TeamBuzzerScreen: React.FC<TeamBuzzerScreenProps> = ({
           onClick={handlePress}
           data-testid="giant-buzzer-button"
           aria-label={statusHeadline}
-          className={`w-full h-full rounded-[44px] border-8 flex flex-col items-center justify-center p-6 text-center transition-all duration-150 select-none ${buttonBgClass}`}
+          className={`hr-buzzer-button w-full h-full rounded-[32px] border-8 flex flex-col items-center justify-center p-6 text-center transition-all duration-150 select-none ${buttonBgClass}`}
         >
           <StatusIcon
             className={`w-20 h-20 sm:w-28 sm:h-28 mb-5 stroke-[2.5] ${

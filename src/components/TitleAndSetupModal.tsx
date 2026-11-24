@@ -337,7 +337,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
   return (
     <div
       dir="rtl"
-      className="fixed inset-0 z-50 bg-[radial-gradient(ellipse_at_75%_15%,#501d83,#221039_55%,#130a23)] flex flex-col justify-between overflow-y-auto overflow-x-hidden select-none"
+      className="hr-home fixed inset-0 z-50 flex flex-col justify-between overflow-y-auto overflow-x-hidden select-none"
     >
       {/* Decorative Floating White Hexagons on Left & Right Edges (Original ELITE CLASH Identity) */}
       <svg
@@ -398,23 +398,35 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
           <div className="lg:col-span-6 flex flex-col items-center justify-center text-center">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#311042]/65 border border-white/20 text-amber-300 text-xs sm:text-sm font-extrabold mb-3 shadow-lg">
               <Trophy className="w-4 h-4" />
-              <span>مكتبة ألعاب مسجد ابن تيمية · دوري ELITE CLASH</span>
+              <span>ساحة ألعاب حروف النخبة</span>
             </div>
 
-            <h1 className="mb-3 w-[min(64vw,17rem)] lg:w-[clamp(15rem,25vw,21rem)]">
+            <h1 className="hr-logo mb-3 w-[min(52vw,12rem)] lg:w-[clamp(10rem,17vw,15rem)]">
               <img
                 src="/assets/brand/horouf-logo.jpg"
                 alt="حروف مع النخبة"
                 width={640}
                 height={640}
                 fetchPriority="high"
-                className="w-full rounded-[24%] shadow-[0_18px_65px_#8c31ff66]"
+                className="w-full rounded-[24%]"
               />
             </h1>
 
-            <p className="text-white/85 text-xs sm:text-sm font-semibold max-w-md mt-1">
-              وصّل مسار فريقك عبر 25 خلية سداسية! الأخضر من الأعلى للأسفل، والبرتقالي من اليمين لليسار.
-            </p>
+            <div className="hr-hero-copy">
+              <span>حروف · سرعة · ذكاء</span>
+              <h2>حرف بيفرق…<br/>ومسار بيفوز!</h2>
+              <p>جاوب صح، امتلك الحرف، ووصّل طرفي اللوحة قبل خصمك.</p>
+            </div>
+            <div className="hr-preview" aria-hidden="true">
+              <svg viewBox="0 0 410 168" className="hr-preview-svg">
+                {['ح','ر','و','ف','ن','خ','ب','ة','س','م','ع','ك','ل','ق','ت'].map((letter,i)=>{
+                  const row=Math.floor(i/5),col=i%5,cx=51+col*70+(row%2)*35,cy=32+row*51;
+                  const color=col===1 ? team1Color : row===1&&col>=2 ? team2Color : '#fff2d6';
+                  return <g key={i}><path d={getRoundedHexPath(cx,cy,38,4)} fill="#190f2b" transform="translate(0 3)"/><path d={getRoundedHexPath(cx,cy,36,4)} fill={color} stroke="#21132d" strokeWidth="2"/><text x={cx} y={cy} textAnchor="middle" dominantBaseline="central" fill="#251435" fontSize="26" fontWeight="900">{letter}</text></g>;
+                })}
+              </svg>
+              <div className="hr-preview-legend"><span><i style={{background:team1Color}}/> أعلى ↕ أسفل</span><span><i style={{background:team2Color}}/> يمين ↔ يسار</span></div>
+            </div>
 
             {/* Side PRO Action Buttons Dock (Categories Drawer, 28-Letter Coverage, Question Bank Admin, Buzzer, Display Mode) */}
             <div className="mt-4 w-full max-w-md space-y-2.5">
@@ -494,11 +506,11 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
           <div className="lg:col-span-6">
             <form
               onSubmit={handleStartGame}
-              className="rounded-3xl bg-[#311042]/85 border-2 border-white/20 p-5 sm:p-6 shadow-2xl text-white space-y-4"
+              className="hr-setup rounded-3xl p-4 sm:p-6 text-white space-y-4"
             >
               <div className="flex items-center justify-between border-b border-white/15 pb-3">
                 <h2 className="text-lg sm:text-xl font-black text-white">
-                  إعدادات المباراة والفرق
+                  جهّز المواجهة
                 </h2>
                 <span className="text-xs font-extrabold px-2.5 py-1 rounded-lg bg-white/10 text-amber-300">
                   25 خلية • 5×5
@@ -773,7 +785,7 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
                 data-start="true"
                 data-testid="btn-start-match"
                 disabled={coverageSummary.totalMatchingQuestions === 0}
-                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-l from-amber-400 via-yellow-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-slate-950 font-black text-lg shadow-xl shadow-black/30 flex items-center justify-center gap-2 transition transform active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                className="hr-start w-full py-3.5 px-6 rounded-2xl bg-gradient-to-l from-amber-400 via-yellow-400 to-orange-400 hover:from-amber-300 hover:to-orange-300 text-slate-950 font-black text-lg shadow-xl shadow-black/30 flex items-center justify-center gap-2 transition transform active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Play className="w-5 h-5 fill-current" />
                 <span>ابدأ المسابقة الآن</span>
@@ -786,9 +798,9 @@ export const TitleAndSetupModal: React.FC<TitleAndSetupModalProps> = ({
       {/* Bottom Studio Attribution Bar */}
       <div className="relative z-10 pb-3 pt-1 text-center">
         <div className="inline-flex items-center gap-3 text-white/75 tracking-widest font-black text-xs sm:text-sm">
-          <span>ELITE CLASH STUDIO</span>
+          <span>حروف النخبة</span>
           <span className="text-amber-300">•</span>
-          <span>مكتبة ألعاب مسجد ابن تيمية</span>
+          <span>ألعاب وتحديات جماعية</span>
         </div>
       </div>
 
