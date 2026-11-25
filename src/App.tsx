@@ -283,7 +283,7 @@ export default function App() {
     const connectWs = () => {
       if (!isMounted) return;
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws?room=${encodeURIComponent(
+      const wsUrl = `${protocol}//${window.location.hostname === "horouf-static-preview-ny5c.onrender.com" ? "horouf-1.onrender.com" : window.location.host}/ws?room=${encodeURIComponent(
         roomCode
       )}&role=${encodeURIComponent(role)}&deviceId=${encodeURIComponent(
         deviceId
